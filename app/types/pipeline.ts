@@ -10,7 +10,7 @@ export const PROVIDERS: ModelProvider[] = [
   { id: 'groq', name: 'Groq (Active)', variants: ['groq/compound', 'groq/compound-mini'] },
 ];
 
-export type DrumStatus = 'READY' | 'PROCESSING' | 'PENDING' | 'PASS' | 'INTERRUPT' | 'ICE_CORRECTION';
+export type DrumStatus = 'READY' | 'PROCESSING' | 'PENDING' | 'PASS' | 'INTERRUPT' | 'ICE_CORRECTION' | 'PENDING_APPROVAL';
 
 export interface DrumPayload {
   drumId: string;
@@ -55,4 +55,5 @@ export interface Session {
     modelRules: string;
     auditorRules: string;
   };
+  pendingApprovals?: Record<string, { payload: string; outgoingEdges: Edge[]; inputDrum: DrumPayload }>;
 }

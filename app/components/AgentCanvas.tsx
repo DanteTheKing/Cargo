@@ -32,6 +32,7 @@ const statusStyles: Record<DrumStatus, string> = {
   PASS: 'border-green-500 bg-green-50 text-green-900',
   INTERRUPT: 'border-red-500 bg-red-50 text-red-900',
   ICE_CORRECTION: 'border-orange-500 bg-orange-50 text-orange-900',
+  PENDING_APPROVAL: 'border-cyan-500 bg-cyan-50 text-cyan-900 animate-pulse',
 };
 
 const ButtonEdge = ({
@@ -93,6 +94,9 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
   const isInterrupt = nodeType === 'interrupt';
   const isModel = nodeType === 'model';
   const isAuditor = nodeType === 'auditor';
+  const isWait = nodeType === 'wait';
+  const isRouter = nodeType === 'router';
+  const isTool = nodeType === 'tool';
 
   let bgColor = 'bg-white';
   if (isInput) bgColor = 'bg-blue-50/50';
@@ -100,6 +104,9 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
   if (isSignal) bgColor = 'bg-amber-50/50';
   if (isInterrupt) bgColor = 'bg-red-50/50';
   if (isAuditor) bgColor = 'bg-purple-50/50';
+  if (isWait) bgColor = 'bg-cyan-50/50';
+  if (isRouter) bgColor = 'bg-fuchsia-50/50';
+  if (isTool) bgColor = 'bg-emerald-50/50';
 
   return (
     <div className={`px-5 py-3 rounded-lg border transition-all duration-300 ${statusStyles[data.status as DrumStatus] || statusStyles.READY} ${selected ? 'ring-2 ring-neutral-900 border-transparent shadow-md' : 'shadow-sm'} min-w-[160px] text-left flex flex-col gap-1.5 ${isOutput ? 'bg-neutral-900' : bgColor}`}>

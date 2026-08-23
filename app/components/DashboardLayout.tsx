@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Node, Edge, Connection, addEdge, useNodesState, useEdgesState } from '@xyflow/react';
 import { AgentCanvas } from './AgentCanvas';
 import { PROVIDERS, DrumStatus, DrumPayload, ReeferSchema, ReeferGrade, Session } from '../types/pipeline';
-import { Database, X, Plus, History, Trash2, Layers, Info, Terminal as TerminalIcon, Layout, Settings } from 'lucide-react';
+import { Database, X, Plus, History, Trash2, Layers, Info, Terminal as TerminalIcon, Layout, Settings, BookOpen } from 'lucide-react';
 import Markdown from 'react-markdown';
 
 const initialNodes: Node[] = [];
@@ -80,6 +80,9 @@ export function DashboardLayout() {
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; content: string }[]>(getInitialValue<{ role: 'user' | 'ai'; content: string }[]>('chatHistory', []));
   const [systemModel, setSystemModel] = useState<{enabled: boolean, description: string, modelRules: string, auditorRules: string}>(getInitialValue('systemModel', { enabled: false, description: '', modelRules: '', auditorRules: '' }));
   const [isSystemModelPanelOpen, setIsSystemModelPanelOpen] = useState(false);
+  const [isDocsOpen, setIsDocsOpen] = useState(false);
+  const pendingApprovalsRef = useRef<Record<string, { resolve: (payload: string) => void, currentPayload: string }>>({});
+  const [waitingNodesTrigger, setWaitingNodesTrigger] = useState(0);
 
   const switchSession = useCallback((sessionId: string, sessionsList?: Session[]) => {
     const list = sessionsList || sessions;
@@ -423,6 +426,7 @@ export function DashboardLayout() {
           systemPrompt += `\n\n[CRITICAL INSTRUCTION] This is the start of a new chat. You MUST output your response as a raw JSON object exactly like this:\n{\n  "chatName": "2-3 Word Title Here",\n  "content": "Your actual full response here"\n}`;
         }
 
+        const startTime = Date.now();
         if (nodeData.provider === 'groq') {
           outputPayload = await callGroqApi(prompt, nodeData.modelVariant as string, systemPrompt, currentReefer || undefined);
         } else if (nodeData.provider === 'gemini') {
@@ -430,6 +434,8 @@ export function DashboardLayout() {
         } else {
           await new Promise(r => setTimeout(r, 1200));
         }
+        const latency = Date.now() - startTime;
+        addLog(`[TELEMETRY] Node ${label} completed in ${latency}ms`);
 
         if (outputPayload.trim().startsWith('{')) {
           try {
@@ -473,7 +479,10 @@ export function DashboardLayout() {
           
         auditPrompt += `\n\nRespond strictly in JSON format: {"status": "PASS" | "FLAG", "reason": "Specific rule matched"}`;
         
+        const startTime = Date.now();
         const result = await callGroqApi(auditPrompt, nodeData.modelVariant || 'groq/compound-mini', "You are a JSON-only deterministic validation engine.");
+        const latency = Date.now() - startTime;
+        addLog(`[TELEMETRY] Auditor Node ${label} completed in ${latency}ms`);
         let auditJson = { status: 'PASS', reason: 'Audit successful.' };
         try {
           auditJson = JSON.parse(result.substring(result.indexOf('{'), result.lastIndexOf('}') + 1));
@@ -521,6 +530,44 @@ export function DashboardLayout() {
         setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'PENDING' } } : n));
         await new Promise(r => setTimeout(r, 1000));
       }
+      else if (nodeData.nodeType === 'tool') {
+        addLog(`[TOOL] Executing mock external tool ${label}...`);
+        await new Promise(r => setTimeout(r, 1000));
+        outputPayload = inputDrum.compressedPayload + `\n\n[TOOL EXECUTED] Fetched mock external data for ${label}.`;
+      }
+      else if (nodeData.nodeType === 'router') {
+        const outgoingEdgesForRouter = edges.filter(e => e.source === nodeId);
+        if (outgoingEdgesForRouter.length > 0) {
+           const routes = outgoingEdgesForRouter.map(e => `Edge ID: ${e.id}, Target Node: ${nodes.find(n=>n.id === e.target)?.data.label || e.target}`).join('\n');
+           const routerPrompt = `PAYLOAD:\n${inputDrum.compressedPayload}\n\nAVAILABLE ROUTES:\n${routes}\n\nBased on the payload, which route is the most appropriate? Reply with strictly the Edge ID as a JSON: {"edgeId": "edge_id_here"}`;
+           const startTime = Date.now();
+           const result = await callGroqApi(routerPrompt, 'groq/compound-mini', "You are a deterministic routing logic gate. Return ONLY valid JSON.");
+           const latency = Date.now() - startTime;
+           addLog(`[TELEMETRY] Router Node ${label} completed in ${latency}ms`);
+           try {
+             const routerJson = JSON.parse(result.substring(result.indexOf('{'), result.lastIndexOf('}') + 1));
+             if (routerJson.edgeId && outgoingEdgesForRouter.find(e => e.id === routerJson.edgeId)) {
+                (nodeData as any).selectedRoute = routerJson.edgeId;
+                addLog(`[ROUTER] Routed payload via edge ${routerJson.edgeId}`);
+             }
+           } catch (e) {
+             console.error("Router Parse Error:", e);
+           }
+        }
+      }
+      else if (nodeData.nodeType === 'wait') {
+        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'PENDING_APPROVAL' } } : n));
+        addLog(`[WAIT] Simulation halted at ${label}. Waiting for human-in-the-loop approval...`);
+        
+        outputPayload = await new Promise<string>((resolve) => {
+          pendingApprovalsRef.current[nodeId] = { resolve, currentPayload: inputDrum.compressedPayload };
+          setWaitingNodesTrigger(prev => prev + 1);
+        });
+        
+        delete pendingApprovalsRef.current[nodeId];
+        setWaitingNodesTrigger(prev => prev + 1);
+        addLog(`[WAIT] Approved at ${label}. Resuming...`);
+      }
 
       setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'PASS' } } : n));
       addLog(`[PASS] ${label} finished.`);
@@ -529,6 +576,8 @@ export function DashboardLayout() {
       let outgoingEdges = edges.filter(e => e.source === nodeId);
       if (nodeData.nodeType === 'auditor') {
         outgoingEdges = outgoingEdges.filter(e => nodes.find(n => n.id === e.target)?.data.nodeType !== 'model');
+      } else if (nodeData.nodeType === 'router' && (nodeData as any).selectedRoute) {
+        outgoingEdges = outgoingEdges.filter(e => e.id === (nodeData as any).selectedRoute);
       }
 
       const successorPromises = outgoingEdges.map(async (edge) => {
@@ -641,6 +690,14 @@ export function DashboardLayout() {
         </button>
         <div className="w-[1px] h-4 bg-neutral-200 mx-1" />
         <button 
+          onClick={() => setIsDocsOpen(!isDocsOpen)}
+          title="Toggle Documentation"
+          className={`p-2 rounded-full transition-all ${isDocsOpen ? 'bg-amber-600 text-white shadow-md' : 'hover:bg-neutral-100 text-neutral-500'}`}
+        >
+          <BookOpen size={18} />
+        </button>
+        <div className="w-[1px] h-4 bg-neutral-200 mx-1" />
+        <button 
           onClick={() => setIsTerminalOpen(!isTerminalOpen)}
           title="Toggle System Terminal"
           className={`p-2 rounded-full transition-all ${isTerminalOpen ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-neutral-100 text-neutral-500'}`}
@@ -659,6 +716,45 @@ export function DashboardLayout() {
 
       {activeTab === 'blueprint' ? (
           <>
+            {isDocsOpen && (
+              <div className="w-80 border-r border-neutral-200 flex flex-col bg-white overflow-y-auto shrink-0 transition-all duration-300">
+                <div className="p-5 border-b border-neutral-200 sticky top-0 z-10 flex justify-between items-center bg-amber-50">
+                  <h2 className="text-[11px] font-black tracking-widest text-amber-900 uppercase">Documentation</h2>
+                  <BookOpen size={16} className="text-amber-600" />
+                </div>
+                <div className="p-5 flex flex-col gap-5 text-sm text-neutral-600">
+                  <div className="p-4 bg-red-50 border border-red-100 rounded-lg shadow-sm">
+                    <h3 className="text-[10px] font-black text-red-800 uppercase tracking-widest mb-2">Model Limitations</h3>
+                    <p className="text-xs text-red-900/80 leading-relaxed">
+                      Due to limited API access and financial constraints, execution is currently restricted to the highly efficient Groq Compound series. Other models are visible for architectural planning but remain inactive during simulation.
+                    </p>
+                  </div>
+                  
+                  <div className="flex flex-col gap-4">
+                    <details className="group border border-neutral-200 rounded-lg overflow-hidden">
+                      <summary className="p-3 bg-neutral-50 cursor-pointer font-bold text-neutral-800 text-xs select-none">Model Node</summary>
+                      <div className="p-3 border-t border-neutral-200 text-xs leading-relaxed">The primary reasoning engine. It takes input, applies instructions, and outputs a transformation.</div>
+                    </details>
+                    <details className="group border border-neutral-200 rounded-lg overflow-hidden">
+                      <summary className="p-3 bg-neutral-50 cursor-pointer font-bold text-neutral-800 text-xs select-none">Auditor Node</summary>
+                      <div className="p-3 border-t border-neutral-200 text-xs leading-relaxed">Evaluates payloads against strict constraints. Can interrupt the flow (FLAG) or allow it to pass (PASS).</div>
+                    </details>
+                    <details className="group border border-neutral-200 rounded-lg overflow-hidden">
+                      <summary className="p-3 bg-neutral-50 cursor-pointer font-bold text-neutral-800 text-xs select-none">Wait Node</summary>
+                      <div className="p-3 border-t border-neutral-200 text-xs leading-relaxed">Halts execution for Human-In-The-Loop approval.</div>
+                    </details>
+                    <details className="group border border-neutral-200 rounded-lg overflow-hidden">
+                      <summary className="p-3 bg-neutral-50 cursor-pointer font-bold text-neutral-800 text-xs select-none">Router Node</summary>
+                      <div className="p-3 border-t border-neutral-200 text-xs leading-relaxed">Uses deterministic reasoning to route a payload down a specific edge based on content conditions.</div>
+                    </details>
+                    <details className="group border border-neutral-200 rounded-lg overflow-hidden">
+                      <summary className="p-3 bg-neutral-50 cursor-pointer font-bold text-neutral-800 text-xs select-none">Tool Node</summary>
+                      <div className="p-3 border-t border-neutral-200 text-xs leading-relaxed">Simulates external tool execution (e.g. searching the web) and injects the result into the payload.</div>
+                    </details>
+                  </div>
+                </div>
+              </div>
+            )}
             {isSystemModelPanelOpen && (
               <div className="w-80 border-r border-neutral-200 flex flex-col bg-white overflow-y-auto shrink-0 transition-all duration-300">
                 <div className="p-5 border-b border-neutral-200 sticky top-0 z-10 flex justify-between items-center bg-white">
@@ -785,8 +881,8 @@ export function DashboardLayout() {
               </div>
               <div className="p-4 flex flex-col gap-6">
                 {[
-                  { category: 'INPUT/OUTPUT', nodes: ['Input', 'Output'] },
-                  { category: 'PROCESSING', nodes: ['Model', 'Auditor', 'Signal', 'Interrupt'] }
+                  { category: 'INPUT/OUTPUT', nodes: ['Input', 'Wait', 'Output'] },
+                  { category: 'PROCESSING', nodes: ['Model', 'Auditor', 'Router', 'Tool', 'Signal', 'Interrupt'] }
                 ].map((group) => (
                   <div key={group.category} className="flex flex-col gap-2">
                     <div className="text-[9px] font-black text-neutral-500 uppercase tracking-widest px-1">{group.category}</div>
@@ -801,9 +897,12 @@ export function DashboardLayout() {
                            <div className={`w-1.5 h-1.5 rounded-full ${
                              n === 'Input' ? 'bg-blue-400' : 
                              n === 'Output' ? 'bg-neutral-400' : 
+                             n === 'Wait' ? 'bg-cyan-400' : 
                              n === 'Signal' ? 'bg-amber-400' : 
                              n === 'Interrupt' ? 'bg-red-400' : 
-                             n === 'Auditor' ? 'bg-purple-400' : 'bg-green-400'
+                             n === 'Auditor' ? 'bg-purple-400' : 
+                             n === 'Router' ? 'bg-fuchsia-400' : 
+                             n === 'Tool' ? 'bg-emerald-400' : 'bg-green-400'
                            }`} />
                            {n.toUpperCase()} NODE
                          </div>
@@ -957,6 +1056,21 @@ export function DashboardLayout() {
                      )}
 
                      <div className="pt-4 border-t border-neutral-100">
+                       {inspectedNode.data.status === 'PENDING_APPROVAL' && (
+                         <div className="mb-4 flex flex-col gap-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                           <label className="text-[9px] font-black text-cyan-800 uppercase tracking-widest">Action Required</label>
+                           <p className="text-[10px] text-cyan-900 leading-relaxed mb-2">The simulation is paused here. Please review the drum state and approve to continue.</p>
+                           <button 
+                             onClick={() => {
+                               const pending = pendingApprovalsRef.current[inspectedNode.id];
+                               if (pending) pending.resolve(pending.currentPayload);
+                             }}
+                             className="w-full bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-black uppercase tracking-widest py-2 rounded shadow-sm transition-all"
+                           >
+                             Approve & Resume
+                           </button>
+                         </div>
+                       )}
                        <button 
                          onClick={() => {
                            setNodes(nds => nds.filter(n => n.id !== inspectedNode.id));
