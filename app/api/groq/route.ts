@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
           content: prompt,
         },
       ],
-      model: model || "llama-3.3-70b-versatile",
+      model: model || "meta/llama-3.3-70b",
     });
 
     return NextResponse.json({

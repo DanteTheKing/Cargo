@@ -231,7 +231,7 @@ const Flow = ({ nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes,
           label: type === 'Model' ? '' : type.replace(' Node', ''), 
           status: 'READY',
           provider: 'groq',
-          modelVariant: 'llama-4-400b',
+          modelVariant: 'meta/llama-3.3-70b',
           temperature: 0.7,
           systemPrompt: 'You are an AI agent participating in this blueprint pipeline.'
         },

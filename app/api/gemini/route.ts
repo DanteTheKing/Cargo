@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -11,18 +11,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
   try {
-    const response = await genAI.models.generateContent({
-      model: model || "gemini-3-pro",
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        systemInstruction: systemPrompt || "You are a helpful assistant."
-      }
+    const genModel = genAI.getGenerativeModel({ 
+      model: model || "gemini-1.5-pro",
+      systemInstruction: systemPrompt || "You are a helpful assistant."
     });
+
+    const result = await genModel.generateContent(prompt);
+    
     return NextResponse.json({
-      text: response.text,
+      text: result.response.text(),
     });
   } catch (error: any) {
     console.error("Gemini API Error:", error);

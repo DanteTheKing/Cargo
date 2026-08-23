@@ -187,7 +187,7 @@ export function DashboardLayout() {
     
     Output ONLY the grade name (CASUAL, STANDARD, or PRODUCTION).`;
 
-    const result = await callGeminiApi(triagePrompt, 'gemini-3-flash', "You are a triage system.");
+    const result = await callGeminiApi(triagePrompt, 'gemini-1.5-flash', "You are a triage system.");
     const cleaned = result.trim().toUpperCase();
     if (cleaned.includes('PRODUCTION')) return 'PRODUCTION';
     if (cleaned.includes('STANDARD')) return 'STANDARD';
@@ -240,7 +240,7 @@ export function DashboardLayout() {
             "validationRules": { "passConditions": string[], "failConditions": string[] }
           }`;
           
-          const result = await callGroqApi(reeferPrompt, 'llama-4-400b', "You are a senior systems architect.");
+          const result = await callGroqApi(reeferPrompt, 'meta/llama-3.3-70b', "You are a senior systems architect.");
           try {
             const parsed = JSON.parse(result.substring(result.indexOf('{'), result.lastIndexOf('}') + 1));
             parsed.grade = grade;
