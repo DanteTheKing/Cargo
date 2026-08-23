@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, DragEvent } from 'react';
+import { useCallback, DragEvent, useState } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -19,9 +19,11 @@ import {
   EdgeLabelRenderer,
   getBezierPath,
   EdgeProps,
+  OnNodeDrag,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { DrumStatus } from '../types/pipeline';
+import { Trash2 } from 'lucide-react';
 
 const statusStyles: Record<DrumStatus, string> = {
   READY: 'border-neutral-200 bg-white text-neutral-900',
@@ -69,10 +71,10 @@ const ButtonEdge = ({
             fontSize: 12,
             pointerEvents: 'all',
           }}
-          className="nodrag nopan group"
+          className="nodrag nopan"
         >
           <button
-            className="w-4 h-4 bg-white border border-neutral-200 text-neutral-400 rounded-full flex items-center justify-center font-bold text-[8px] shadow-sm hover:bg-red-500 hover:text-white hover:border-red-500 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+            className="w-4 h-4 bg-white border border-red-200 text-red-500 rounded-full flex items-center justify-center font-bold text-[8px] shadow-sm hover:bg-red-500 hover:text-white hover:border-red-500 transition-all cursor-pointer opacity-100"
             onClick={onEdgeClick}
           >
             ✕
@@ -158,11 +160,52 @@ interface FlowProps {
 
 const Flow = ({ nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes, onNodeSelect, onEdgeSelect }: FlowProps) => {
   const reactFlowInstance = useReactFlow();
+  const [isOverTrash, setIsOverTrash] = useState(false);
 
   const onDragOver = useCallback((event: DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
   }, []);
+
+  const onNodeDrag: OnNodeDrag = useCallback((event, node) => {
+    // Check if the node is being dragged over the trash zone area
+    const trashZone = document.getElementById('trash-zone');
+    if (trashZone) {
+      const rect = trashZone.getBoundingClientRect();
+      const clientX = 'clientX' in event ? event.clientX : event.touches[0].clientX;
+      const clientY = 'clientY' in event ? event.clientY : event.touches[0].clientY;
+      
+      const isOver = (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      );
+      setIsOverTrash(isOver);
+    }
+  }, []);
+
+  const onNodeDragStop: OnNodeDrag = useCallback((event, node) => {
+    const trashZone = document.getElementById('trash-zone');
+    if (trashZone) {
+      const rect = trashZone.getBoundingClientRect();
+      const clientX = 'clientX' in event ? event.clientX : event.touches[0].clientX;
+      const clientY = 'clientY' in event ? event.clientY : event.touches[0].clientY;
+
+      const isOver = (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      );
+      
+      if (isOver) {
+        setNodes((nds) => nds.filter((n) => n.id !== node.id));
+        onNodeSelect(null);
+      }
+    }
+    setIsOverTrash(false);
+  }, [setNodes, onNodeSelect]);
 
   const onDrop = useCallback(
     (event: DragEvent) => {
@@ -211,6 +254,8 @@ const Flow = ({ nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes,
         onNodeSelect(params.nodes.length > 0 ? params.nodes[0] : null);
         onEdgeSelect(params.edges.length > 0 ? params.edges[0] : null);
       }}
+      onNodeDrag={onNodeDrag}
+      onNodeDragStop={onNodeDragStop}
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       fitView
@@ -219,6 +264,23 @@ const Flow = ({ nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes,
       <Controls className="bg-white border-neutral-200 shadow-sm" />
       <MiniMap zoomable pannable nodeClassName="bg-neutral-200" maskColor="rgba(255,255,255,0.7)" className="border border-neutral-200 rounded-lg shadow-sm" />
       <Background gap={24} size={2} color="#e5e5e5" />
+      
+      {/* Red Glowing Trash Zone */}
+      <div 
+        id="trash-zone"
+        className={`absolute bottom-20 left-1/2 -translate-x-1/2 z-[50] p-4 rounded-full transition-all duration-300 border-2 ${
+          isOverTrash 
+            ? 'bg-red-500 text-white scale-125 border-red-400 shadow-[0_0_30px_rgba(239,68,68,0.8)]' 
+            : 'bg-white/80 backdrop-blur-md text-red-500 border-red-200 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
+        }`}
+      >
+        <div className={isOverTrash ? 'animate-bounce' : 'animate-pulse'}>
+          <Trash2 size={24} />
+        </div>
+        <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-black uppercase tracking-widest text-red-600 bg-white/80 px-2 py-0.5 rounded-full border border-red-100">
+          Drop to Delete
+        </div>
+      </div>
     </ReactFlow>
   );
 };

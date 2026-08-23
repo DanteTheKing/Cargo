@@ -15,7 +15,7 @@ const firaCode = Fira_Code({
 });
 
 export const metadata: Metadata = {
-  title: 'Agentic Blueprint Workspace',
+  title: 'CARGO',
   description: 'Node-based multi-agent orchestration and pipeline constraints.',
 };
 

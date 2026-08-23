@@ -1,5 +1,5 @@
 {
-  "name": "Agentic Blueprint Workspace",
+  "name": "CARGO",
   "description": "A node-based multi-agent graph canvas with rigid guardrails and data containers.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
