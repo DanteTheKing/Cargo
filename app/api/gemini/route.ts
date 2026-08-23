@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const response = await genAI.models.generateContent({
-      model: model || "gemini-1.5-pro",
+      model: model || "gemini-3-pro",
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         systemInstruction: systemPrompt || "You are a helpful assistant."

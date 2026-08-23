@@ -231,7 +231,7 @@ const Flow = ({ nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes,
           label: type === 'Model' ? '' : type.replace(' Node', ''), 
           status: 'READY',
           provider: 'gemini',
-          modelVariant: 'gemini-1.5-pro',
+          modelVariant: 'gemini-3-pro',
           temperature: 0.7,
           systemPrompt: 'You are an AI agent participating in this blueprint pipeline.'
         },

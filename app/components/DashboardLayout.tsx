@@ -109,13 +109,17 @@ export function DashboardLayout() {
     setNodes((nds) => 
       nds.map((node) => {
         if (node.id === id) {
-          const updatedNode = { ...node, data: { ...node.data, ...newData } };
-          if (selectedNode?.id === id) setSelectedNode(updatedNode);
-          return updatedNode;
+          return { ...node, data: { ...node.data, ...newData } };
         }
         return node;
       })
     );
+    setSelectedNode((prev) => {
+      if (prev?.id === id) {
+        return { ...prev, data: { ...prev.data, ...newData } };
+      }
+      return prev;
+    });
   };
 
   const updateEdgeData = (id: string, newData: any) => {
@@ -189,7 +193,7 @@ export function DashboardLayout() {
     
     Output ONLY the grade name (CASUAL, STANDARD, or PRODUCTION).`;
 
-    const result = await callGeminiApi(triagePrompt, 'gemini-1.5-flash', "You are a triage system.");
+    const result = await callGeminiApi(triagePrompt, 'gemini-3-flash', "You are a triage system.");
     const cleaned = result.trim().toUpperCase();
     if (cleaned.includes('PRODUCTION')) return 'PRODUCTION';
     if (cleaned.includes('STANDARD')) return 'STANDARD';
