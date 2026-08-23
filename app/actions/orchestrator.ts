@@ -14,7 +14,7 @@ export async function executePipelineStep(
   if (payloadLower.includes('error') || payloadLower.includes('fail')) {
     return {
       ...currentDrum,
-      status: 'INTERRUPT',
+      status: 'ICE_CORRECTION',
     };
   }
 

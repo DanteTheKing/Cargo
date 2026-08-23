@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Node, Edge, Connection, addEdge, useNodesState, useEdgesState } from '@xyflow/react';
 import { AgentCanvas } from './AgentCanvas';
 import { PROVIDERS, DrumStatus, DrumPayload, ReeferSchema, ReeferGrade, Session } from '../types/pipeline';
+import { motion } from 'framer-motion';
+import { ManualOverlay } from './ManualOverlay';
 import { Database, X, Plus, History, Trash2, Layers, Info, Terminal as TerminalIcon, Layout, Settings, BookOpen } from 'lucide-react';
 import Markdown from 'react-markdown';
 
@@ -36,6 +38,7 @@ export function DashboardLayout() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const visibleEdges = edges.map(e => ({ ...e, animated: isPathVisible || e.animated }));
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const inspectedNode = nodes.find(n => n.id === selectedNodeId);
@@ -45,6 +48,7 @@ export function DashboardLayout() {
   const [drumSnapshots, setDrumSnapshots] = useState<Record<string, DrumPayload>>({});
   const [apiResults, setApiResults] = useState<Record<string, string>>({});
   const [isRunning, setIsRunning] = useState(false);
+  const [isPathVisible, setIsPathVisible] = useState(false);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isReeferPanelOpen, setIsReeferPanelOpen] = useState(false);
@@ -53,6 +57,7 @@ export function DashboardLayout() {
   const [systemModel, setSystemModel] = useState<{enabled: boolean, description: string, modelRules: string, auditorRules: string}>({ enabled: false, description: '', modelRules: '', auditorRules: '' });
   const [isSystemModelPanelOpen, setIsSystemModelPanelOpen] = useState(false);
   const [isDocsOpen, setIsDocsOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const pendingApprovalsRef = useRef<Record<string, { resolve: (payload: string) => void, currentPayload: string }>>({});
   const [waitingNodesTrigger, setWaitingNodesTrigger] = useState(0);
 
@@ -121,7 +126,7 @@ export function DashboardLayout() {
     setSystemModel(session.systemModel || { enabled: false, description: '', modelRules: '', auditorRules: '' });
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
-  }, [currentSessionId, reefer, logs, nodes, edges, drumSnapshots, chatInput, chatHistory, systemModel, sessions, setNodes, setEdges]);
+  }, [currentSessionId, reefer, setSessions, setLogs, setReefer, setDrumSnapshots, setChatInput, setChatHistory, setSystemModel, setSelectedNodeId, setSelectedEdgeId, logs, nodes, edges, drumSnapshots, chatInput, chatHistory, systemModel, sessions, setNodes, setEdges]);
 
   // Persistence: Save on change
   useEffect(() => {
@@ -497,7 +502,7 @@ export function DashboardLayout() {
         }
 
         if(auditJson.status === 'FLAG') {
-           setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'INTERRUPT' } } : n));
+           setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'ICE_CORRECTION' } } : n));
            addLog(`[AUDIT FLAG] ${auditJson.reason}`);
            setChatHistory(prev => [...prev, { role: 'ai', content: `🚨 **AUDIT FLAG:** ${auditJson.reason}` }]);
            
@@ -661,6 +666,9 @@ export function DashboardLayout() {
           >
             {isReeferPanelOpen ? 'HIDE REEFER' : 'SHOW REEFER'}
           </button>
+          <button onClick={() => setIsPathVisible(!isPathVisible)} className="border border-neutral-200 hover:bg-neutral-50 text-neutral-600 px-4 py-2 rounded-md text-[11px] font-black transition-all shadow-sm tracking-widest uppercase">
+            {isPathVisible ? 'HIDE SET PATH' : 'SHOW SET PATH'}
+          </button>
           <button 
             onClick={runSimulation} 
             disabled={isRunning} 
@@ -672,7 +680,7 @@ export function DashboardLayout() {
       </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-1 p-1.5 bg-white/80 backdrop-blur-md border border-neutral-200 rounded-full shadow-2xl scale-110">
+      <motion.div drag dragMomentum={false} className="absolute bottom-8 left-1/2 z-[100] flex items-center gap-1 p-1.5 bg-white/80 backdrop-blur-md border border-neutral-200 rounded-full shadow-2xl scale-110" style={{ x: "-50%" }}>
         <button 
           onClick={() => setIsSystemModelPanelOpen(!isSystemModelPanelOpen)}
           title="Toggle System Model Rules"
@@ -720,49 +728,35 @@ export function DashboardLayout() {
         >
           <Layout size={18} />
         </button>
-      </div>
+        <div className="w-[1px] h-4 bg-neutral-200 mx-1" />
+        <button onClick={() => setIsHistoryOpen(!isHistoryOpen)} title="Toggle Chat History" className={`p-2 rounded-full transition-all ${isHistoryOpen ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-neutral-100 text-neutral-500'}`}>
+          <History size={18} />
+        </button>
+      </motion.div>
+
+      
+      {isHistoryOpen && (
+        <div className="w-64 border-r border-neutral-200 bg-white flex flex-col shrink-0 z-20">
+          <div className="p-4 border-b border-neutral-100 flex justify-between items-center bg-neutral-50/50">
+            <h2 className="text-[11px] font-black tracking-widest text-neutral-900 uppercase">Sessions</h2>
+            <button onClick={() => switchSession(`session_${Date.now()}`, [...sessions, { id: `session_${Date.now()}`, title: 'New Thread', reefer: null, logs: ['[SYSTEM] Session initialized.'], nodes: [], edges: [], drumSnapshots: {}, chatInput: '', chatHistory: [], timestamp: Date.now() }])} className="text-blue-600 hover:text-blue-700">
+              <Plus size={16} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {sessions.map(s => (
+              <div key={s.id} onClick={() => switchSession(s.id)} className={`w-full text-left px-3 py-2 rounded text-xs font-bold transition-all cursor-pointer ${currentSessionId === s.id ? 'bg-blue-50 text-blue-700' : 'text-neutral-600 hover:bg-neutral-50'}`}>
+                <div className="truncate">{s.title || 'Untitled Thread'}</div>
+                <div className="text-[9px] font-medium text-neutral-400 mt-0.5">{new Date(s.timestamp).toLocaleTimeString()}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {activeTab === 'blueprint' ? (
           <>
-            {isDocsOpen && (
-              <div className="w-80 border-r border-neutral-200 flex flex-col bg-white overflow-y-auto shrink-0 transition-all duration-300">
-                <div className="p-5 border-b border-neutral-200 sticky top-0 z-10 flex justify-between items-center bg-amber-50">
-                  <h2 className="text-[11px] font-black tracking-widest text-amber-900 uppercase">Documentation</h2>
-                  <BookOpen size={16} className="text-amber-600" />
-                </div>
-                <div className="p-5 flex flex-col gap-5 text-sm text-neutral-600">
-                  <div className="p-4 bg-red-50 border border-red-100 rounded-lg shadow-sm">
-                    <h3 className="text-[10px] font-black text-red-800 uppercase tracking-widest mb-2">Model Limitations</h3>
-                    <p className="text-xs text-red-900/80 leading-relaxed">
-                      Due to limited API access and financial constraints, execution is currently restricted to the highly efficient Groq Compound series. Other models are visible for architectural planning but remain inactive during simulation.
-                    </p>
-                  </div>
-                  
-                  <div className="flex flex-col gap-4">
-                    <details className="group border border-neutral-200 rounded-lg overflow-hidden">
-                      <summary className="p-3 bg-neutral-50 cursor-pointer font-bold text-neutral-800 text-xs select-none">Model Node</summary>
-                      <div className="p-3 border-t border-neutral-200 text-xs leading-relaxed">The primary reasoning engine. It takes input, applies instructions, and outputs a transformation.</div>
-                    </details>
-                    <details className="group border border-neutral-200 rounded-lg overflow-hidden">
-                      <summary className="p-3 bg-neutral-50 cursor-pointer font-bold text-neutral-800 text-xs select-none">Auditor Node</summary>
-                      <div className="p-3 border-t border-neutral-200 text-xs leading-relaxed">Evaluates payloads against strict constraints. Can interrupt the flow (FLAG) or allow it to pass (PASS).</div>
-                    </details>
-                    <details className="group border border-neutral-200 rounded-lg overflow-hidden">
-                      <summary className="p-3 bg-neutral-50 cursor-pointer font-bold text-neutral-800 text-xs select-none">Wait Node</summary>
-                      <div className="p-3 border-t border-neutral-200 text-xs leading-relaxed">Halts execution for Human-In-The-Loop approval.</div>
-                    </details>
-                    <details className="group border border-neutral-200 rounded-lg overflow-hidden">
-                      <summary className="p-3 bg-neutral-50 cursor-pointer font-bold text-neutral-800 text-xs select-none">Router Node</summary>
-                      <div className="p-3 border-t border-neutral-200 text-xs leading-relaxed">Uses deterministic reasoning to route a payload down a specific edge based on content conditions.</div>
-                    </details>
-                    <details className="group border border-neutral-200 rounded-lg overflow-hidden">
-                      <summary className="p-3 bg-neutral-50 cursor-pointer font-bold text-neutral-800 text-xs select-none">Tool Node</summary>
-                      <div className="p-3 border-t border-neutral-200 text-xs leading-relaxed">Simulates external tool execution (e.g. searching the web) and injects the result into the payload.</div>
-                    </details>
-                  </div>
-                </div>
-              </div>
-            )}
+            
             {isSystemModelPanelOpen && (
               <div className="w-80 border-r border-neutral-200 flex flex-col bg-white overflow-y-auto shrink-0 transition-all duration-300">
                 <div className="p-5 border-b border-neutral-200 sticky top-0 z-10 flex justify-between items-center bg-white">
@@ -890,7 +884,7 @@ export function DashboardLayout() {
               <div className="p-4 flex flex-col gap-6">
                 {[
                   { category: 'INPUT/OUTPUT', nodes: ['Input', 'Wait', 'Output'] },
-                  { category: 'PROCESSING', nodes: ['Model', 'Auditor', 'Router', 'Tool', 'Signal', 'Interrupt'] }
+                  { category: 'PROCESSING', nodes: ['Model', 'Auditor', 'Router', 'Tool', 'Signal'] }
                 ].map((group) => (
                   <div key={group.category} className="flex flex-col gap-2">
                     <div className="text-[9px] font-black text-neutral-500 uppercase tracking-widest px-1">{group.category}</div>
@@ -907,7 +901,6 @@ export function DashboardLayout() {
                              n === 'Output' ? 'bg-neutral-400' : 
                              n === 'Wait' ? 'bg-cyan-400' : 
                              n === 'Signal' ? 'bg-amber-400' : 
-                             n === 'Interrupt' ? 'bg-red-400' : 
                              n === 'Auditor' ? 'bg-purple-400' : 
                              n === 'Router' ? 'bg-fuchsia-400' : 
                              n === 'Tool' ? 'bg-emerald-400' : 'bg-green-400'
@@ -945,7 +938,7 @@ export function DashboardLayout() {
               <div className="flex-1 relative">
                  <AgentCanvas 
                    nodes={nodes} 
-                   edges={edges} 
+                   edges={visibleEdges} 
                    onNodesChange={onNodesChange} 
                    onEdgesChange={onEdgesChange} 
                    onConnect={onConnect} 
@@ -1198,6 +1191,17 @@ export function DashboardLayout() {
           </div>
         )}
       </div>
+    
+      <ManualOverlay 
+        isOpen={isDocsOpen} 
+        onClose={() => setIsDocsOpen(false)} 
+        onLoadExample={(newNodes, newEdges) => {
+          setNodes(newNodes);
+          setEdges(newEdges);
+          setIsDocsOpen(false);
+          setActiveTab('blueprint');
+        }} 
+      />
     </div>
   );
 }

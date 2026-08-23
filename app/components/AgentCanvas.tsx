@@ -30,7 +30,6 @@ const statusStyles: Record<DrumStatus, string> = {
   PROCESSING: 'border-blue-500 bg-blue-50 text-blue-900',
   PENDING: 'border-amber-400 bg-amber-50 text-amber-900 animate-pulse',
   PASS: 'border-green-500 bg-green-50 text-green-900',
-  INTERRUPT: 'border-red-500 bg-red-50 text-red-900',
   ICE_CORRECTION: 'border-orange-500 bg-orange-50 text-orange-900',
   PENDING_APPROVAL: 'border-cyan-500 bg-cyan-50 text-cyan-900 animate-pulse',
 };
@@ -91,7 +90,6 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
   const isInput = nodeType === 'input';
   const isOutput = nodeType === 'output';
   const isSignal = nodeType === 'signal';
-  const isInterrupt = nodeType === 'interrupt';
   const isModel = nodeType === 'model';
   const isAuditor = nodeType === 'auditor';
   const isWait = nodeType === 'wait';
@@ -102,7 +100,6 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
   if (isInput) bgColor = 'bg-blue-50/50';
   if (isOutput) bgColor = 'bg-neutral-900 text-white';
   if (isSignal) bgColor = 'bg-amber-50/50';
-  if (isInterrupt) bgColor = 'bg-red-50/50';
   if (isAuditor) bgColor = 'bg-purple-50/50';
   if (isWait) bgColor = 'bg-cyan-50/50';
   if (isRouter) bgColor = 'bg-fuchsia-50/50';
@@ -119,8 +116,7 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
       )}
       
       <div className="flex justify-between items-center gap-4">
-        <div className="font-bold tracking-tight text-[11px] uppercase opacity-50">
-          {isInterrupt ? 'Interrupt (ICE)' : nodeType}
+        <div className="font-bold tracking-tight text-[11px] uppercase opacity-50"> {nodeType}
         </div>
         {data.iceToken && (
           <div className="text-[9px] bg-red-600 text-white px-1.5 py-0.5 rounded font-black animate-pulse">ICE</div>
@@ -228,7 +224,6 @@ const Flow = ({ nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes,
       });
 
       const nodeType = type.toLowerCase().includes('model') ? 'model' : 
-                       type.toLowerCase().includes('interrupt') ? 'interrupt' : 
                        type.toLowerCase().includes('auditor') ? 'auditor' :
                        type.toLowerCase();
       
