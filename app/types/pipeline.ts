@@ -7,9 +7,9 @@ export interface ModelProvider {
 }
 
 export const PROVIDERS: ModelProvider[] = [
+  { id: 'groq', name: 'Groq (Active)', variants: ['llama-4-400b', 'deepseek-v3-coder', 'mistral-large-3'] },
   { id: 'gemini', name: 'Google Gemini', variants: ['gemini-3-pro', 'gemini-3-flash', 'gemini-2.5-ultra'] },
   { id: 'anthropic', name: 'Anthropic Claude', variants: ['claude-4-sonnet', 'claude-4-opus', 'claude-4-haiku'] },
-  { id: 'groq', name: 'Open Sourced', variants: ['llama-4-400b', 'deepseek-v3-coder', 'mistral-large-3'] },
 ];
 
 export type DrumStatus = 'READY' | 'PROCESSING' | 'PENDING' | 'PASS' | 'INTERRUPT' | 'ICE_CORRECTION';

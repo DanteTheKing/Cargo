@@ -15,8 +15,10 @@ export function DashboardLayout() {
   const [activeTab, setActiveTab] = useState<'blueprint' | 'chat'>('blueprint');
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const inspectedNode = nodes.find(n => n.id === selectedNodeId);
+  const inspectedEdge = edges.find(e => e.id === selectedEdgeId);
   const [logs, setLogs] = useState<string[]>([]);
   const [reefer, setReefer] = useState<ReeferSchema | null>(null);
   const [drumSnapshots, setDrumSnapshots] = useState<Record<string, DrumPayload>>({});
@@ -77,8 +79,8 @@ export function DashboardLayout() {
     setReefer(session.reefer);
     setDrumSnapshots(session.drumSnapshots);
     setChatInput(session.chatInput);
-    setSelectedNode(null);
-    setSelectedEdge(null);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
   };
 
   const deleteSession = (sessionId: string, e: React.MouseEvent) => {
@@ -114,12 +116,6 @@ export function DashboardLayout() {
         return node;
       })
     );
-    setSelectedNode((prev) => {
-      if (prev?.id === id) {
-        return { ...prev, data: { ...prev.data, ...newData } };
-      }
-      return prev;
-    });
   };
 
   const updateEdgeData = (id: string, newData: any) => {
@@ -127,14 +123,12 @@ export function DashboardLayout() {
       eds.map((edge) => {
         if (edge.id === id) {
            const isSignal = newData.isSignal;
-           const updatedEdge = { 
+           return { 
              ...edge, 
              data: { ...edge.data, ...newData },
              animated: true,
              style: isSignal ? { stroke: '#ef4444', strokeWidth: 2, strokeDasharray: '5,5' } : { stroke: '#d4d4d8', strokeWidth: 1.5 }
            };
-           if (selectedEdge?.id === id) setSelectedEdge(updatedEdge);
-           return updatedEdge;
         }
         return edge;
       })
@@ -206,9 +200,7 @@ export function DashboardLayout() {
     let activeSessionId = currentSessionId;
     if (!activeSessionId) {
       createNewSession();
-      // Since createNewSession is async in terms of state updates, we might need to be careful.
-      // But for this simple implementation, we'll just ensure we have one.
-      return; // Stop this run and let the user click again or handled automatically
+      return;
     }
 
     setIsRunning(true);
@@ -217,14 +209,12 @@ export function DashboardLayout() {
     setApiResults({});
     setLogs(['[SYSTEM] Initializing State Machine Flow...']);
 
-    // PHASE -1: TRIAGE
     addLog(`[TRIAGE] Analyzing intent...`);
     const grade = await runTriage(chatInput || 'Default Idea');
     addLog(`[TRIAGE] Session Grade: ${grade}`);
 
     let currentReefer = reefer;
 
-    // PHASE 0: REEFER GENERATION
     if (!currentReefer || currentReefer.grade !== grade) {
       if (grade === 'CASUAL') {
         currentReefer = {
@@ -250,16 +240,13 @@ export function DashboardLayout() {
             "validationRules": { "passConditions": string[], "failConditions": string[] }
           }`;
           
-          const result = await callGroqApi(reeferPrompt, 'llama-3.3-70b-versatile', "You are a senior systems architect.");
+          const result = await callGroqApi(reeferPrompt, 'llama-4-400b', "You are a senior systems architect.");
           try {
             const parsed = JSON.parse(result.substring(result.indexOf('{'), result.lastIndexOf('}') + 1));
-            parsed.grade = grade; // Ensure grade is correct
+            parsed.grade = grade;
             currentReefer = parsed;
             setReefer(parsed);
-            
-            // UPDATE SESSION TITLE
             setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, title: parsed.projectName } : s));
-            
             addLog(`[REEFER] ${grade} Ground Truth established: ${parsed.projectName}`);
           } catch (e) {
             addLog(`[ERROR] Failed to parse Reefer JSON.`);
@@ -286,7 +273,6 @@ export function DashboardLayout() {
 
       let outputPayload = inputDrum.compressedPayload;
 
-      // NODE TYPE LOGIC
       if (nodeData.nodeType === 'input') {
         outputPayload = chatInput || 'Default Idea';
         await new Promise(r => setTimeout(r, 800));
@@ -319,7 +305,6 @@ export function DashboardLayout() {
       addLog(`[PASS] ${label} finished.`);
       executedNodes.add(nodeId);
 
-      // TRIGGER SUCCESSORS
       const outgoingEdges = edges.filter(e => e.source === nodeId);
       const successorPromises = outgoingEdges.map(async (edge) => {
         const nextDrum: DrumPayload = {
@@ -334,11 +319,9 @@ export function DashboardLayout() {
       });
 
       await Promise.all(successorPromises);
-      
       setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'READY' } } : n));
     };
 
-    // START FROM INPUT NODES
     const startNodes = nodes.filter(n => n.data.nodeType === 'input');
     if (startNodes.length === 0) {
       addLog('[ERROR] No Input node found on the canvas.');
@@ -354,26 +337,14 @@ export function DashboardLayout() {
       addLog('[SYSTEM] Session Cycle Complete.');
     }
 
-    // FINAL SESSION SYNC
-    setSessions(prev => prev.map(s => s.id === currentSessionId ? {
-      ...s,
-      reefer: currentReefer,
-      logs: [...logs, `[${new Date().toLocaleTimeString()}] [SYSTEM] Session Cycle Complete.`], // Note: this might be slightly stale logs, but okay for now
-      nodes,
-      edges,
-      drumSnapshots,
-      chatInput,
-    } : s));
-
     setIsRunning(false);
   };
 
   return (
     <div className="flex flex-col h-screen w-full bg-white text-neutral-900 overflow-hidden font-sans">
-      {/* Top Header / Navigation Tabs */}
       <div className="h-14 border-b border-neutral-200 bg-white flex items-center justify-between px-6 shrink-0 z-30 shadow-sm relative">
         <div className="flex items-center gap-8">
-          <div className="font-black tracking-tighter text-[16px] text-blue-600">AGENTIC.CORE</div>
+          <div className="font-black tracking-tighter text-[16px] text-blue-600">CARGO</div>
           <nav className="flex items-center gap-1 bg-neutral-100 p-1 rounded-md">
             <button 
               onClick={() => setActiveTab('blueprint')}
@@ -407,7 +378,6 @@ export function DashboardLayout() {
       </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Floating Workspace Control Bar (The Tooltip Pen) */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-1 p-1.5 bg-white/80 backdrop-blur-md border border-neutral-200 rounded-full shadow-2xl scale-110">
         <button 
           onClick={() => setIsReeferPanelOpen(!isReeferPanelOpen)}
@@ -443,9 +413,7 @@ export function DashboardLayout() {
       </div>
 
       {activeTab === 'blueprint' ? (
-
           <>
-            {/* Left Panel: Reefer Tree */}
             {isReeferPanelOpen && (
               <div className="w-80 border-r border-neutral-200 flex flex-col bg-neutral-50/50 overflow-y-auto shrink-0 transition-all duration-300">
                 <div className="p-5 border-b border-neutral-200 bg-white sticky top-0 z-10 flex justify-between items-center">
@@ -518,7 +486,6 @@ export function DashboardLayout() {
               </div>
             )}
 
-            {/* Left Panel: Node Library */}
             <div className="w-64 border-r border-neutral-200 bg-neutral-900 flex flex-col shrink-0 overflow-y-auto">
               <div className="p-5 border-b border-neutral-800 bg-neutral-950 sticky top-0 z-10">
                 <h2 className="text-[10px] font-black tracking-widest text-neutral-400 uppercase">NODE PALETTE</h2>
@@ -551,14 +518,8 @@ export function DashboardLayout() {
                   </div>
                 ))}
               </div>
-              <div className="mt-auto p-5 border-t border-neutral-800">
-                <div className="text-[9px] text-neutral-500 font-medium leading-relaxed italic">
-                  Drag nodes onto the canvas to expand your blueprint logic.
-                </div>
-              </div>
             </div>
 
-            {/* Main Canvas Area */}
             <div className="flex-1 flex flex-col min-w-0 bg-neutral-50/50 relative">
               <div className="flex-1 relative">
                  <AgentCanvas 
@@ -568,8 +529,8 @@ export function DashboardLayout() {
                    onEdgesChange={onEdgesChange} 
                    onConnect={onConnect} 
                    setNodes={setNodes} 
-                   onNodeSelect={setSelectedNode} 
-                   onEdgeSelect={setSelectedEdge}
+                   onNodeSelect={(node) => setSelectedNodeId(node?.id || null)} 
+                   onEdgeSelect={(edge) => setSelectedEdgeId(edge?.id || null)}
                  />
               </div>
               
@@ -581,17 +542,10 @@ export function DashboardLayout() {
                   </div>
                   <div className="flex-1 p-5 overflow-y-auto space-y-1.5 font-mono text-[12px] leading-relaxed text-neutral-400">
                     {logs.map((log, index) => {
-                      const timestampMatch = log.match(/^\[(.*?)\]/);
-                      const timestamp = timestampMatch ? timestampMatch[1] : '';
-                      const contentWithoutTimestamp = log.replace(/^\[.*?\]\s*/, '');
-                      const tagMatch = contentWithoutTimestamp.match(/^\[(.*?)\]/);
-                      const tag = tagMatch ? tagMatch[1] : 'LOG';
-                      const finalContent = contentWithoutTimestamp.replace(/^\[.*?\]\s*/, '');
-
+                      const finalContent = log.replace(/^\[.*?\]\s*\[.*?\]\s*/, '') || log;
                       return (
-                        <div key={index} className={`flex gap-2 ${log.includes('[ICE]') || log.includes('[REVERSE]') || log.includes('[SIGNAL]') || log.includes('[FIRE]') ? 'text-red-400 bg-red-400/5 px-2 py-1 rounded' : log.includes('[PASS]') ? 'text-green-400' : log.includes('[PAYLOAD]') || log.includes('[DRUM]') ? 'text-blue-400' : log.includes('[TRIAGE]') ? 'text-purple-400' : ''}`}>
-                          <span className="opacity-40 shrink-0 select-none w-16">[{timestamp}]</span>
-                          <span className="opacity-60 shrink-0 select-none w-16 font-black text-[10px]">[{tag}]</span>
+                        <div key={index} className="flex gap-2">
+                          <span className="opacity-40 shrink-0 select-none w-32">{log.substring(0, log.indexOf(']') + 1)}</span>
                           <div className="markdown-logs flex-1">
                             <Markdown>{finalContent}</Markdown>
                           </div>
@@ -604,217 +558,174 @@ export function DashboardLayout() {
               )}
             </div>
 
-            {/* Right Panel: Properties */}
             {isInspectorOpen && (
               <div className="w-80 border-l border-neutral-200 bg-white flex flex-col shrink-0 overflow-y-auto">
-              <div className="p-5 border-b border-neutral-200 bg-white sticky top-0 z-10">
-                <h2 className="text-[11px] font-black tracking-widest text-neutral-900 uppercase">INSPECTOR</h2>
-              </div>
-              
-              {selectedNode ? (
-                <div className="p-5 flex flex-col gap-6">
-                   <div className="flex flex-col gap-2">
-                     <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">Display Name</label>
-                     <input 
-                       value={selectedNode.data.label as string} 
-                       placeholder={(selectedNode.data.modelVariant as string) || 'Unnamed'}
-                       onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value })}
-                       className="border border-neutral-200 p-3 text-[13px] font-bold focus:outline-none focus:border-blue-500 rounded-md bg-neutral-50" 
-                     />
-                   </div>
-
-                   {selectedNode.data.nodeType === 'model' && (
-                     <>
-                       <div className="flex flex-col gap-2">
-                         <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">AI Provider</label>
-                         <div className="grid grid-cols-1 gap-2">
-                            {PROVIDERS.map(p => (
-                              <button 
-                                key={p.id}
-                                onClick={() => updateNodeData(selectedNode.id, { provider: p.id, modelVariant: p.variants[0] })}
-                                className={`p-3 text-[12px] font-bold text-left border rounded-md transition-all ${selectedNode.data.provider === p.id ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-neutral-200 hover:border-neutral-400'}`}
-                              >
-                                {p.name}
-                              </button>
-                            ))}
-                         </div>
-                       </div>
-
-                       <div className="flex flex-col gap-2">
-                         <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">Model Variant</label>
-                         <select 
-                           value={selectedNode.data.modelVariant as string}
-                           onChange={(e) => updateNodeData(selectedNode.id, { modelVariant: e.target.value })}
-                           className="border border-neutral-200 p-3 text-[12px] font-bold focus:outline-none focus:border-blue-500 rounded-md bg-neutral-50"
-                         >
-                           {PROVIDERS.find(p => p.id === selectedNode.data.provider)?.variants.map(v => (
-                             <option key={v} value={v}>{v}</option>
-                           ))}
-                         </select>
-                       </div>
-
-                       <div className="flex flex-col gap-2">
-                         <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em] flex justify-between">
-                           <span>Temperature</span>
-                           <span className="text-neutral-900">{selectedNode.data.temperature as number}</span>
-                         </label>
-                         <input 
-                           type="range" min="0" max="1" step="0.1" 
-                           value={selectedNode.data.temperature as number}
-                           onChange={(e) => updateNodeData(selectedNode.id, { temperature: parseFloat(e.target.value) })}
-                           className="w-full accent-blue-600 h-1.5 bg-neutral-100 rounded-lg appearance-none cursor-pointer"
-                         />
-                       </div>
-
-                       {apiResults[selectedNode.id] && (
-                         <div className="flex flex-col gap-2 mt-4">
-                            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">Latest Model Output</label>
-                            <div className="p-3 bg-neutral-950 text-green-500 font-mono text-[11px] rounded border border-neutral-800 h-32 overflow-y-auto whitespace-pre-wrap">
-                               {apiResults[selectedNode.id]}
-                            </div>
-                         </div>
-                       )}
-
-                       <div className="flex flex-col gap-2 mt-2">
-                         <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">System Instructions</label>
-                         <textarea 
-                           value={selectedNode.data.systemPrompt as string}
-                           onChange={(e) => updateNodeData(selectedNode.id, { systemPrompt: e.target.value })}
-                           placeholder="Enter strict instructions for this model..."
-                           className="border border-neutral-200 p-3 text-[12px] font-medium focus:outline-none focus:border-blue-500 rounded-md bg-neutral-50 h-24 resize-none"
-                         />
-                       </div>
-                     </>
-                   )}
+                <div className="p-5 border-b border-neutral-200 bg-white sticky top-0 z-10 flex justify-between items-center">
+                  <h2 className="text-[11px] font-black tracking-widest text-neutral-900 uppercase">INSPECTOR</h2>
+                  <button onClick={() => setIsInspectorOpen(false)} className="text-neutral-400 hover:text-neutral-900"><X size={16} /></button>
                 </div>
-              ) : selectedEdge ? (
-                <div className="p-5 flex flex-col gap-6">
-                   <div className="flex flex-col gap-2">
-                     <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">Drum JSON (Compressed Payload)</label>
-                     <div className="p-4 bg-neutral-900 text-blue-400 font-mono text-[11px] rounded border border-neutral-800 min-h-[150px] overflow-y-auto whitespace-pre-wrap">
-                        {drumSnapshots[selectedEdge.id] ? JSON.stringify(drumSnapshots[selectedEdge.id], null, 2) : 'No data passed through this wire yet.'}
+                
+                {inspectedNode ? (
+                  <div className="p-5 flex flex-col gap-6">
+                     <div className="flex flex-col gap-2">
+                       <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">Display Name</label>
+                       <input 
+                         value={inspectedNode.data.label as string} 
+                         placeholder={(inspectedNode.data.modelVariant as string) || 'Unnamed'}
+                         onChange={(e) => updateNodeData(inspectedNode.id, { label: e.target.value })}
+                         className="border border-neutral-200 p-3 text-[13px] font-bold focus:outline-none focus:border-blue-500 rounded-md bg-neutral-50" 
+                       />
                      </div>
-                   </div>
-                   <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg">
-                      <div className="text-[10px] font-black text-blue-800 uppercase tracking-widest mb-1">Context Handoff</div>
-                      <p className="text-[11px] text-blue-600 leading-relaxed">
-                        This Drum has been stripped of conversational noise to preserve context window integrity.
-                      </p>
-                   </div>
-                </div>
-              ) : (
-                <div className="p-10 text-[10px] font-black text-neutral-300 uppercase tracking-[0.3em] text-center mt-10">Select Node or Wire to Inspect</div>
-              )}
-            </div>
-          )}
-          </>
-        ) : (
-          /* Chat Interface Tab */
-          <div className="flex-1 flex overflow-hidden">
-            {/* History Sidebar */}
-            <div className="w-72 border-r border-neutral-200 bg-white flex flex-col shrink-0 transition-all">
-              <div className="p-5 border-b border-neutral-200 flex justify-between items-center bg-neutral-50/50">
-                <div className="flex items-center gap-2">
-                  <History size={14} className="text-neutral-400" />
-                  <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Sessions</h3>
-                </div>
-                <button 
-                  onClick={createNewSession} 
-                  className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-md transition-all border border-transparent hover:border-blue-100 flex items-center gap-1"
-                >
-                  <Plus size={14} />
-                  <span className="text-[10px] font-black">NEW</span>
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                {sessions.length === 0 ? (
-                  <div className="text-center py-10 px-6">
-                    <p className="text-[11px] text-neutral-400 font-medium">No sessions found. Create one to get started.</p>
+
+                     {inspectedNode.data.nodeType === 'model' && (
+                       <>
+                         <div className="flex flex-col gap-2">
+                           <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">AI Provider</label>
+                           <div className="grid grid-cols-1 gap-2">
+                              {PROVIDERS.map(p => {
+                                const isActive = p.id === 'groq';
+                                return (
+                                  <button 
+                                    key={p.id}
+                                    onClick={() => updateNodeData(inspectedNode.id, { provider: p.id, modelVariant: p.variants[0] })}
+                                    className={`p-3 text-[12px] font-bold text-left border rounded-md transition-all flex justify-between items-center ${
+                                      inspectedNode.data.provider === p.id 
+                                        ? (isActive ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-red-500 bg-red-50 text-red-700') 
+                                        : (isActive ? 'border-neutral-200 hover:border-neutral-400' : 'border-red-100 bg-red-50/20 text-red-400/60 transition-opacity')
+                                    }`}
+                                  >
+                                    <span>{p.name}</span>
+                                    {!isActive && <span className="text-[7px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded tracking-tighter uppercase">Inactive</span>}
+                                    {isActive && <span className="text-[7px] font-black bg-green-500 text-white px-1.5 py-0.5 rounded tracking-tighter uppercase">Active</span>}
+                                  </button>
+                                );
+                              })}
+                           </div>
+                         </div>
+
+                         <div className="flex flex-col gap-2">
+                           <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">Model Variant</label>
+                           <select 
+                             value={inspectedNode.data.modelVariant as string}
+                             onChange={(e) => updateNodeData(inspectedNode.id, { modelVariant: e.target.value })}
+                             className="border border-neutral-200 p-3 text-[12px] font-bold focus:outline-none focus:border-blue-500 rounded-md bg-neutral-50"
+                           >
+                             {PROVIDERS.find(p => p.id === inspectedNode.data.provider)?.variants.map(v => (
+                               <option key={v} value={v}>{v}</option>
+                             ))}
+                           </select>
+                         </div>
+
+                         <div className="flex flex-col gap-2">
+                           <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em] flex justify-between">
+                             <span>Temperature</span>
+                             <span className="text-neutral-900">{inspectedNode.data.temperature as number}</span>
+                           </label>
+                           <input 
+                             type="range" min="0" max="1" step="0.1" 
+                             value={inspectedNode.data.temperature as number}
+                             onChange={(e) => updateNodeData(inspectedNode.id, { temperature: parseFloat(e.target.value) })}
+                             className="w-full accent-blue-600 h-1.5 bg-neutral-100 rounded-lg appearance-none cursor-pointer"
+                           />
+                         </div>
+
+                         <div className="flex flex-col gap-2 mt-2">
+                           <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">System Instructions</label>
+                           <textarea 
+                             value={inspectedNode.data.systemPrompt as string}
+                             onChange={(e) => updateNodeData(inspectedNode.id, { systemPrompt: e.target.value })}
+                             placeholder="Enter strict instructions for this model..."
+                             className="border border-neutral-200 p-3 text-[12px] font-medium focus:outline-none focus:border-blue-500 rounded-md bg-neutral-50 h-24 resize-none"
+                           />
+                         </div>
+
+                         <div className="pt-4 border-t border-neutral-100">
+                           <button 
+                             onClick={() => {
+                               setNodes(nds => nds.filter(n => n.id !== inspectedNode.id));
+                               setSelectedNodeId(null);
+                             }}
+                             className="w-full p-3 border border-red-200 text-red-500 text-[11px] font-black uppercase tracking-widest rounded-md hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+                           >
+                             <Trash2 size={14} />
+                             Purge Node
+                           </button>
+                         </div>
+                       </>
+                     )}
+                  </div>
+                ) : inspectedEdge ? (
+                  <div className="p-5 flex flex-col gap-6">
+                     <div className="flex flex-col gap-2">
+                       <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">Drum JSON (Compressed Payload)</label>
+                       <div className="p-3 bg-neutral-950 text-blue-400 font-mono text-[10px] rounded border border-neutral-800 h-64 overflow-y-auto whitespace-pre">
+                          {drumSnapshots[inspectedEdge.id] ? JSON.stringify(drumSnapshots[inspectedEdge.id], null, 2) : 'No data passed through this wire yet.'}
+                       </div>
+                     </div>
+                     <div className="mt-4">
+                       <button 
+                         onClick={() => {
+                           setEdges(eds => eds.filter(e => e.id !== inspectedEdge.id));
+                           setSelectedEdgeId(null);
+                         }}
+                         className="w-full p-3 border border-red-200 text-red-500 text-[11px] font-black uppercase tracking-widest rounded-md hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+                       >
+                         <Trash2 size={14} />
+                         Sever Connection
+                       </button>
+                     </div>
                   </div>
                 ) : (
-                  sessions.map(session => (
-                    <div 
-                      key={session.id}
-                      onClick={() => switchSession(session.id)}
-                      className={`group p-4 rounded-xl cursor-pointer transition-all border relative ${
-                        currentSessionId === session.id 
-                          ? 'bg-blue-50 border-blue-200 shadow-sm' 
-                          : 'hover:bg-neutral-50 border-transparent'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start gap-3">
-                        <div className="flex flex-col gap-1 overflow-hidden">
-                          <span className={`text-[12px] font-bold truncate ${currentSessionId === session.id ? 'text-blue-900' : 'text-neutral-700'}`}>
-                            {session.title}
-                          </span>
-                          <div className="flex items-center gap-2">
-                             <span className="text-[9px] font-black opacity-40 uppercase tracking-tighter">
-                               {session.reefer?.grade || 'UNSORTED'}
-                             </span>
-                             <span className="text-[9px] opacity-40 font-medium">
-                               {new Date(session.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                             </span>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={(e) => deleteSession(session.id, e)}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-100 hover:text-red-600 rounded-lg transition-all"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                  <div className="p-10 text-[10px] font-black text-neutral-300 uppercase tracking-[0.3em] text-center mt-10">Select Node or Wire to Inspect</div>
                 )}
               </div>
-            </div>
-
-            <div className="flex-1 flex flex-col bg-neutral-50 p-10 overflow-hidden relative">
-              <div className="max-w-3xl mx-auto w-full flex-1 flex flex-col gap-6">
-                <div className="flex-1 overflow-y-auto p-6 bg-white border border-neutral-200 rounded-xl shadow-sm space-y-6">
-                  {!currentSessionId ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-300">
-                        <History size={32} />
+            )}
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col bg-neutral-50/50">
+            <div className="flex-1 p-10 overflow-y-auto">
+               <div className="max-w-3xl mx-auto space-y-8">
+                  {logs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center space-y-6 pt-20">
+                      <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 animate-pulse">
+                        <TerminalIcon size={40} />
                       </div>
-                      <div className="space-y-1">
-                        <p className="text-[14px] font-bold text-neutral-900">No Session Selected</p>
-                        <p className="text-[12px] text-neutral-500 max-w-[200px]">Select a session from the history or start a new architectural flow.</p>
+                      <div className="space-y-2">
+                        <h1 className="text-2xl font-black tracking-tighter text-neutral-900">SYSTEM READY</h1>
+                        <p className="text-neutral-500 max-w-sm mx-auto text-sm leading-relaxed">
+                          Your architectural pipeline is prepared. Describe your objective and run the blueprint.
+                        </p>
                       </div>
                     </div>
                   ) : (
-                    <>
-                      <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 opacity-50">
-                        <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-300">
-                          <Plus size={32} />
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-[14px] font-bold text-neutral-900">Workspace Empty</p>
-                          <p className="text-[12px] text-neutral-500 max-w-[200px]">Describe your project below to initialize the architectural session.</p>
+                    logs.map((log, i) => (
+                      <div key={i} className="flex gap-4 group">
+                        <div className="w-8 h-8 rounded bg-neutral-100 flex items-center justify-center text-neutral-400 shrink-0 font-black text-[10px]">AI</div>
+                        <div className="flex-1 space-y-2">
+                          <div className="text-[14px] leading-relaxed text-neutral-800">
+                             <Markdown>{log.replace(/^\[.*?\]\s*\[.*?\]\s*/, '')}</Markdown>
+                          </div>
                         </div>
                       </div>
-                    </>
+                    ))
                   )}
-                </div>
-                
-                <div className="flex gap-4 items-end">
-                  <div className="flex-1 flex flex-col gap-2">
-                    <label className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em]">Session Prompt</label>
-                    <textarea 
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      disabled={!currentSessionId}
-                      placeholder="Describe the site or logic you want to build..."
-                      className="w-full border border-neutral-200 p-5 text-[15px] font-medium focus:outline-none focus:border-blue-500 rounded-xl shadow-sm resize-none h-32 disabled:opacity-50"
-                    />
-                  </div>
+               </div>
+            </div>
+            <div className="p-8 border-t border-neutral-200 bg-white">
+              <div className="max-w-3xl mx-auto relative">
+                <textarea 
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Describe your architectural objective..."
+                  className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-4 pr-32 text-[14px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all min-h-[60px] max-h-32 resize-none font-medium"
+                />
+                <div className="absolute right-3 bottom-3 flex items-center gap-2">
                   <button 
                     onClick={runSimulation}
-                    disabled={!chatInput || isRunning || !currentSessionId}
-                    className="bg-blue-600 hover:bg-blue-700 text-white p-5 rounded-xl shadow-lg disabled:opacity-50 disabled:shadow-none transition-all flex flex-col items-center justify-center min-w-[140px]"
+                    disabled={isRunning || !chatInput.trim()}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all shadow-sm"
                   >
-                    <div className="font-black text-[12px] uppercase tracking-widest leading-none mb-1">RUN</div>
-                    <div className="text-[9px] font-bold opacity-70 uppercase tracking-tighter">BLUEPRINT</div>
+                    {isRunning ? 'EXEC' : 'START'}
                   </button>
                 </div>
               </div>
