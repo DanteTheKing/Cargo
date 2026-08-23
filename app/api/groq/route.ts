@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
           content: prompt,
         },
       ],
-      model: model || "meta/llama-3.3-70b",
+      model: model || "groq/compound",
     });
 
     return NextResponse.json({

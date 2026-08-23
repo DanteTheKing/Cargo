@@ -222,6 +222,7 @@ const Flow = ({ nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes,
 
       const nodeType = type.toLowerCase().includes('model') ? 'model' : 
                        type.toLowerCase().includes('interrupt') ? 'interrupt' : 
+                       type.toLowerCase().includes('auditor') ? 'auditor' :
                        type.toLowerCase();
       
       const newNode: Node = {
@@ -233,7 +234,7 @@ const Flow = ({ nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes,
           label: type === 'Model' ? '' : type.replace(' Node', ''), 
           status: 'READY',
           provider: 'groq',
-          modelVariant: 'meta/llama-3.3-70b',
+          modelVariant: nodeType === 'auditor' ? 'groq/compound-mini' : 'groq/compound',
           temperature: 0.7,
           systemPrompt: 'You are an AI agent participating in this blueprint pipeline.'
         },

@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { Node, Edge, Connection, addEdge, useNodesState, useEdgesState } from '@xyflow/react';
 import { AgentCanvas } from './AgentCanvas';
 import { PROVIDERS, DrumStatus, DrumPayload, ReeferSchema, ReeferGrade, Session } from '../types/pipeline';
-import { Database, X, Plus, History, Trash2, Layers, Info, Terminal as TerminalIcon, Layout } from 'lucide-react';
+import { Database, X, Plus, History, Trash2, Layers, Info, Terminal as TerminalIcon, Layout, Settings } from 'lucide-react';
 import Markdown from 'react-markdown';
 
 const initialNodes: Node[] = [];
@@ -13,43 +13,116 @@ const initialEdges: Edge[] = [];
 
 export function DashboardLayout() {
   const [activeTab, setActiveTab] = useState<'blueprint' | 'chat'>('blueprint');
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  
+  const [sessions, setSessions] = useState<Session[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('cargo_sessions');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch (e) {
+          console.error("Failed to parse sessions", e);
+        }
+      }
+    }
+    return [{
+      id: 'initial_thread',
+      title: 'Default Thread',
+      reefer: null,
+      logs: ['[SYSTEM] Session initialized.'],
+      nodes: [],
+      edges: [],
+      drumSnapshots: {},
+      chatInput: '',
+      chatHistory: [],
+      timestamp: Date.now(),
+    }];
+  });
+
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const savedId = localStorage.getItem('cargo_active_session_id');
+      if (savedId) return savedId;
+    }
+    return 'initial_thread';
+  });
+
+  const getInitialValue = <T,>(key: keyof Session, fallback: T): T => {
+    if (typeof window === 'undefined') return fallback;
+    const savedSessions = localStorage.getItem('cargo_sessions');
+    const savedActiveId = localStorage.getItem('cargo_active_session_id');
+    if (savedSessions && savedActiveId) {
+      try {
+        const parsed = JSON.parse(savedSessions);
+        const session = parsed.find((s: any) => s.id === savedActiveId);
+        if (session && session[key] !== undefined) return session[key] as T;
+      } catch (e) {}
+    }
+    return fallback;
+  };
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(getInitialValue<Node[]>('nodes', []));
+  const [edges, setEdges, onEdgesChange] = useEdgesState(getInitialValue<Edge[]>('edges', []));
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const inspectedNode = nodes.find(n => n.id === selectedNodeId);
   const inspectedEdge = edges.find(e => e.id === selectedEdgeId);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [reefer, setReefer] = useState<ReeferSchema | null>(null);
-  const [drumSnapshots, setDrumSnapshots] = useState<Record<string, DrumPayload>>({});
+  const [logs, setLogs] = useState<string[]>(getInitialValue<string[]>('logs', []));
+  const [reefer, setReefer] = useState<ReeferSchema | null>(getInitialValue<ReeferSchema | null>('reefer', null));
+  const [drumSnapshots, setDrumSnapshots] = useState<Record<string, DrumPayload>>(getInitialValue<Record<string, DrumPayload>>('drumSnapshots', {}));
   const [apiResults, setApiResults] = useState<Record<string, string>>({});
   const [isRunning, setIsRunning] = useState(false);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isReeferPanelOpen, setIsReeferPanelOpen] = useState(false);
-  const [chatInput, setChatInput] = useState('');
-  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; content: string }[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [chatInput, setChatInput] = useState(getInitialValue<string>('chatInput', ''));
+  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; content: string }[]>(getInitialValue<{ role: 'user' | 'ai'; content: string }[]>('chatHistory', []));
+  const [systemModel, setSystemModel] = useState<{enabled: boolean, description: string, modelRules: string, auditorRules: string}>(getInitialValue('systemModel', { enabled: false, description: '', modelRules: '', auditorRules: '' }));
+  const [isSystemModelPanelOpen, setIsSystemModelPanelOpen] = useState(false);
 
-  useEffect(() => {
-    if (sessions.length === 0 && !currentSessionId) {
-      const initSession: Session = {
-        id: Math.random().toString(36).substring(7),
-        title: 'Default Thread',
-        reefer: null,
-        logs: ['[SYSTEM] Session initialized.'],
-        nodes: [],
-        edges: [],
-        drumSnapshots: {},
-        chatInput: '',
-        chatHistory: [],
-        timestamp: Date.now(),
-      };
-      setSessions([initSession]);
-      setCurrentSessionId(initSession.id);
+  const switchSession = useCallback((sessionId: string, sessionsList?: Session[]) => {
+    const list = sessionsList || sessions;
+    const session = list.find(s => s.id === sessionId);
+    if (!session) return;
+    
+    // Save current session before switching
+    if (currentSessionId && !sessionsList) {
+      setSessions(prev => prev.map(s => s.id === currentSessionId ? {
+        ...s,
+        reefer,
+        logs,
+        nodes,
+        edges,
+        drumSnapshots,
+        chatInput,
+        chatHistory,
+        systemModel,
+      } : s));
     }
-  }, [sessions.length, currentSessionId]);
+
+    setCurrentSessionId(sessionId);
+    setNodes(session.nodes || []);
+    setEdges(session.edges || []);
+    setLogs(session.logs || []);
+    setReefer(session.reefer || null);
+    setDrumSnapshots(session.drumSnapshots || {});
+    setChatInput(session.chatInput || '');
+    setChatHistory(session.chatHistory || []);
+    setSystemModel(session.systemModel || { enabled: false, description: '', modelRules: '', auditorRules: '' });
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+  }, [currentSessionId, reefer, logs, nodes, edges, drumSnapshots, chatInput, chatHistory, systemModel, sessions, setNodes, setEdges]);
+
+  // Persistence: Save on change
+  useEffect(() => {
+    if (sessions.length > 0) {
+      localStorage.setItem('cargo_sessions', JSON.stringify(sessions));
+    }
+    if (currentSessionId) {
+      localStorage.setItem('cargo_active_session_id', currentSessionId);
+    }
+  }, [sessions, currentSessionId]);
 
   const createNewSession = () => {
     const newSession: Session = {
@@ -77,36 +150,6 @@ export function DashboardLayout() {
     setChatHistory([]);
   };
 
-  const switchSession = (sessionId: string) => {
-    const session = sessions.find(s => s.id === sessionId);
-    if (!session) return;
-    
-    // Save current session before switching
-    if (currentSessionId) {
-      setSessions(prev => prev.map(s => s.id === currentSessionId ? {
-        ...s,
-        reefer,
-        logs,
-        nodes,
-        edges,
-        drumSnapshots,
-        chatInput,
-        chatHistory,
-      } : s));
-    }
-
-    setCurrentSessionId(sessionId);
-    setNodes(session.nodes);
-    setEdges(session.edges);
-    setLogs(session.logs);
-    setReefer(session.reefer);
-    setDrumSnapshots(session.drumSnapshots);
-    setChatInput(session.chatInput);
-    setChatHistory(session.chatHistory || []);
-    setSelectedNodeId(null);
-    setSelectedEdgeId(null);
-  };
-
   const deleteSession = (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSessions(prev => prev.filter(s => s.id !== sessionId));
@@ -119,6 +162,59 @@ export function DashboardLayout() {
 
   const addLog = (message: string) => {
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
+  };
+
+  const applyTemplate = (templateId: string) => {
+    let newNodes: Node[] = [];
+    let newEdges: Edge[] = [];
+
+    if (templateId === 'linear') {
+      newNodes = [
+        { id: 't-in', type: 'custom', position: { x: 100, y: 100 }, data: { nodeType: 'input', label: 'Objective', status: 'READY' } },
+        { id: 't-mod', type: 'custom', position: { x: 350, y: 100 }, data: { nodeType: 'model', label: 'Architect', status: 'READY', provider: 'groq', modelVariant: 'groq/compound', temperature: 0.7, systemPrompt: 'Generate a technical blueprint.' } },
+        { id: 't-aud', type: 'custom', position: { x: 600, y: 100 }, data: { nodeType: 'auditor', label: 'Compliance', status: 'READY', provider: 'groq', modelVariant: 'groq/compound-mini', temperature: 0.1, systemPrompt: 'Verify technical accuracy.' } },
+        { id: 't-out', type: 'custom', position: { x: 850, y: 100 }, data: { nodeType: 'output', label: 'Deployment', status: 'READY' } },
+      ];
+      newEdges = [
+        { id: 'e1', source: 't-in', target: 't-mod', type: 'buttonEdge', animated: true },
+        { id: 'e2', source: 't-mod', target: 't-aud', type: 'buttonEdge', animated: true },
+        { id: 'e3', source: 't-aud', target: 't-out', type: 'buttonEdge', animated: true },
+      ];
+    } else if (templateId === 'loop') {
+      newNodes = [
+        { id: 't-in', type: 'custom', position: { x: 100, y: 100 }, data: { nodeType: 'input', label: 'Objective', status: 'READY' } },
+        { id: 't-mod', type: 'custom', position: { x: 350, y: 100 }, data: { nodeType: 'model', label: 'Creator', status: 'READY', provider: 'groq', modelVariant: 'groq/compound', temperature: 0.7, systemPrompt: 'Draft content based on input.' } },
+        { id: 't-aud', type: 'custom', position: { x: 350, y: 300 }, data: { nodeType: 'auditor', label: 'Safety Auditor', status: 'READY', provider: 'groq', modelVariant: 'groq/compound-mini', temperature: 0.1, systemPrompt: 'Audit content for safety and tone.' } },
+        { id: 't-out', type: 'custom', position: { x: 600, y: 100 }, data: { nodeType: 'output', label: 'Final Approval', status: 'READY' } },
+      ];
+      newEdges = [
+        { id: 'e1', source: 't-in', target: 't-mod', type: 'buttonEdge', animated: true },
+        { id: 'e2', source: 't-mod', target: 't-aud', type: 'buttonEdge', animated: true },
+        { id: 'e3', source: 't-aud', target: 't-mod', type: 'buttonEdge', animated: true, label: 'ICE RE-ENTRY', style: { stroke: '#f59e0b' } },
+        { id: 'e4', source: 't-aud', target: 't-out', type: 'buttonEdge', animated: true },
+      ];
+    } else if (templateId === 'parallel') {
+      newNodes = [
+        { id: 't-in', type: 'custom', position: { x: 100, y: 200 }, data: { nodeType: 'input', label: 'Core Input', status: 'READY' } },
+        { id: 't-mod1', type: 'custom', position: { x: 350, y: 100 }, data: { nodeType: 'model', label: 'Expert A', status: 'READY', provider: 'groq', modelVariant: 'groq/compound', temperature: 0.7, systemPrompt: 'Analyze from Perspective A.' } },
+        { id: 't-mod2', type: 'custom', position: { x: 350, y: 300 }, data: { nodeType: 'model', label: 'Expert B', status: 'READY', provider: 'groq', modelVariant: 'groq/compound', temperature: 0.7, systemPrompt: 'Analyze from Perspective B.' } },
+        { id: 't-sig', type: 'custom', position: { x: 600, y: 200 }, data: { nodeType: 'signal', label: 'Consensus', status: 'READY' } },
+        { id: 't-aud', type: 'custom', position: { x: 800, y: 200 }, data: { nodeType: 'auditor', label: 'Conflict Resolver', status: 'READY', provider: 'groq', modelVariant: 'groq/compound-mini', temperature: 0.1, systemPrompt: 'Resolve any conflicts in data.' } },
+        { id: 't-out', type: 'custom', position: { x: 1000, y: 200 }, data: { nodeType: 'output', label: 'Unified Output', status: 'READY' } },
+      ];
+      newEdges = [
+        { id: 'e1', source: 't-in', target: 't-mod1', type: 'buttonEdge', animated: true },
+        { id: 'e2', source: 't-in', target: 't-mod2', type: 'buttonEdge', animated: true },
+        { id: 'e3', source: 't-mod1', target: 't-sig', type: 'buttonEdge', animated: true },
+        { id: 'e4', source: 't-mod2', target: 't-sig', type: 'buttonEdge', animated: true },
+        { id: 'e5', source: 't-sig', target: 't-aud', type: 'buttonEdge', animated: true },
+        { id: 'e6', source: 't-aud', target: 't-out', type: 'buttonEdge', animated: true },
+      ];
+    }
+
+    setNodes(newNodes);
+    setEdges(newEdges);
+    addLog(`[TEMPLATE] Applied ${templateId.toUpperCase()} configuration.`);
   };
 
   const onConnect = useCallback(
@@ -230,6 +326,12 @@ export function DashboardLayout() {
       createNewSession();
       return;
     }
+    
+    let needsNaming = false;
+    const activeSession = sessions.find(s => s.id === activeSessionId);
+    if (activeSession && (activeSession.title === 'Default Thread' || activeSession.title === 'Empty Thread')) {
+       needsNaming = true;
+    }
 
     setIsRunning(true);
     setIsTerminalOpen(true);
@@ -255,30 +357,27 @@ export function DashboardLayout() {
         setReefer(currentReefer);
         addLog(`[REEFER] Casual session (Optimized for finance).`);
       } else {
-        addLog(`[REEFER] Generating ${grade} Ground Truth Tree...`);
-        const reeferGenNode = nodes.find(n => n.id === 'model_1') || nodes.find(n => n.data.nodeType === 'model');
-        if (reeferGenNode) {
-          const reeferPrompt = `Generate a ${grade} Grade Project Reefer for: "${inputToProcess}". 
-          Output ONLY a JSON object with this schema:
-          {
-            "grade": "${grade}",
-            "projectName": string,
-            "globalBoundaries": { "technicalStack": string[], "excludedFeatures": string[] },
-            "systemHierarchy": { "architectureLayers": Record<string, string> },
-            "validationRules": { "passConditions": string[], "failConditions": string[] }
-          }`;
-          
-          const result = await callGroqApi(reeferPrompt, 'meta/llama-3.3-70b', "You are a senior systems architect.");
-          try {
-            const parsed = JSON.parse(result.substring(result.indexOf('{'), result.lastIndexOf('}') + 1));
-            parsed.grade = grade;
-            currentReefer = parsed;
-            setReefer(parsed);
-            setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, title: parsed.projectName } : s));
-            addLog(`[REEFER] ${grade} Ground Truth established: ${parsed.projectName}`);
-          } catch (e) {
-            addLog(`[ERROR] Failed to parse Reefer JSON.`);
-          }
+        addLog(`[REEFER] Generating ${grade} Ground Truth Tree via System Architect...`);
+        const reeferPrompt = `Generate a ${grade} Grade Project Reefer for: "${inputToProcess}". 
+        Output ONLY a JSON object with this schema:
+        {
+          "grade": "${grade}",
+          "projectName": string,
+          "globalBoundaries": { "technicalStack": string[], "excludedFeatures": string[] },
+          "systemHierarchy": { "architectureLayers": Record<string, string> },
+          "validationRules": { "passConditions": string[], "failConditions": string[] }
+        }`;
+        
+        const result = await callGroqApi(reeferPrompt, 'groq/compound', "You are a senior systems architect. Return ONLY raw JSON without markdown formatting.");
+        try {
+          const parsed = JSON.parse(result.substring(result.indexOf('{'), result.lastIndexOf('}') + 1));
+          parsed.grade = grade;
+          currentReefer = parsed;
+          setReefer(parsed);
+          setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, title: parsed.projectName } : s));
+          addLog(`[REEFER] ${grade} Ground Truth established: ${parsed.projectName}`);
+        } catch (e) {
+          addLog(`[ERROR] Failed to parse Reefer JSON.`);
         }
       }
     }
@@ -311,9 +410,18 @@ export function DashboardLayout() {
           ? inputDrum.compressedPayload 
           : `Current Payload: ${inputDrum.compressedPayload}\nNext Instruction: ${inputDrum.nextInstruction}`;
         
-        const systemPrompt = isCasual
+        let systemPrompt = isCasual
           ? `${nodeData.systemPrompt}\n\nMODE: CASUAL. Be warm and friendly in output. Use Markdown. Stay brief and direct internally to save tokens.`
           : `${nodeData.systemPrompt}\n\nMODE: PRODUCTION. Output ONLY raw actionable data. Strip all chatter. Strict adherence to Reefer constraints.`;
+
+        if (systemModel.enabled) {
+          systemPrompt += `\n\n[SYSTEM MODEL RULES]\nProject Description: ${systemModel.description}\nModel Rules: ${systemModel.modelRules}`;
+        }
+
+        if (needsNaming) {
+          needsNaming = false; // Prevent parallel nodes from also doing this
+          systemPrompt += `\n\n[CRITICAL INSTRUCTION] This is the start of a new chat. You MUST output your response as a raw JSON object exactly like this:\n{\n  "chatName": "2-3 Word Title Here",\n  "content": "Your actual full response here"\n}`;
+        }
 
         if (nodeData.provider === 'groq') {
           outputPayload = await callGroqApi(prompt, nodeData.modelVariant as string, systemPrompt, currentReefer || undefined);
@@ -322,10 +430,29 @@ export function DashboardLayout() {
         } else {
           await new Promise(r => setTimeout(r, 1200));
         }
+
+        if (outputPayload.trim().startsWith('{')) {
+          try {
+             let jsonStr = outputPayload;
+             if (jsonStr.includes('```json')) {
+               jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+             } else if (jsonStr.includes('```')) {
+               jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+             }
+             const parsed = JSON.parse(jsonStr);
+             if (parsed.chatName && parsed.content) {
+                const newTitle = parsed.chatName;
+                outputPayload = parsed.content;
+                setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, title: newTitle } : s));
+             }
+          } catch (e) {
+             // Fallback to normal payload if parsing fails
+          }
+        }
         setApiResults(prev => ({ ...prev, [nodeId]: outputPayload }));
       }
       else if (nodeData.nodeType === 'auditor') {
-        const auditPrompt = `
+        let auditPrompt = `
           PAYLOAD TO AUDIT:
           ${inputDrum.compressedPayload}
           
@@ -336,9 +463,17 @@ export function DashboardLayout() {
           Act as a deterministic parser. Do NOT use outside knowledge. 
           1. Check if the payload violates ANY Fail Conditions.
           2. Check if the payload meets the Pass Conditions.
-          Respond strictly in JSON format: {"status": "PASS" | "FLAG", "reason": "Specific rule matched"}
-        `;
-        const result = await callGroqApi(auditPrompt, 'meta/llama-3.3-70b', "You are a JSON-only deterministic validation engine.");
+          
+          DEVELOPER INSTRUCTIONS:
+          ${nodeData.systemPrompt}`;
+
+        if (systemModel.enabled) {
+          auditPrompt += `\n\n[SYSTEM MODEL RULES]\nProject Description: ${systemModel.description}\nAuditor Rules: ${systemModel.auditorRules}`;
+        }
+          
+        auditPrompt += `\n\nRespond strictly in JSON format: {"status": "PASS" | "FLAG", "reason": "Specific rule matched"}`;
+        
+        const result = await callGroqApi(auditPrompt, nodeData.modelVariant || 'groq/compound-mini', "You are a JSON-only deterministic validation engine.");
         let auditJson = { status: 'PASS', reason: 'Audit successful.' };
         try {
           auditJson = JSON.parse(result.substring(result.indexOf('{'), result.lastIndexOf('}') + 1));
@@ -350,6 +485,27 @@ export function DashboardLayout() {
            setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'INTERRUPT' } } : n));
            addLog(`[AUDIT FLAG] ${auditJson.reason}`);
            setChatHistory(prev => [...prev, { role: 'ai', content: `🚨 **AUDIT FLAG:** ${auditJson.reason}` }]);
+           
+           const feedbackEdges = edges.filter(e => e.source === nodeId && nodes.find(n => n.id === e.target)?.data.nodeType === 'model');
+           if (feedbackEdges.length > 0) {
+              const feedbackPayload = `PREVIOUS PAYLOAD:\n${inputDrum.compressedPayload}\n\nAUDIT FLAG REASON:\n${auditJson.reason}\n\nFIX INSTRUCTIONS:\nPlease revise the payload to address the audit flag.`;
+              
+              const successorPromises = feedbackEdges.map(async (edge) => {
+                const nextDrum: DrumPayload = {
+                  drumId: `drum_${Math.random().toString(36).substr(2, 5)}`,
+                  sequenceStep: inputDrum.sequenceStep + 1,
+                  compressedPayload: feedbackPayload,
+                  nextInstruction: "Fix the payload based on auditor feedback.",
+                  status: 'PASS'
+                };
+                captureSnapshot(edge.id, nextDrum);
+                executedNodes.delete(edge.target);
+                return executeNode(edge.target, nextDrum);
+              });
+              await Promise.all(successorPromises);
+           }
+           
+           setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'READY' } } : n));
            return; 
         } else {
            outputPayload = inputDrum.compressedPayload; 
@@ -370,7 +526,11 @@ export function DashboardLayout() {
       addLog(`[PASS] ${label} finished.`);
       executedNodes.add(nodeId);
 
-      const outgoingEdges = edges.filter(e => e.source === nodeId);
+      let outgoingEdges = edges.filter(e => e.source === nodeId);
+      if (nodeData.nodeType === 'auditor') {
+        outgoingEdges = outgoingEdges.filter(e => nodes.find(n => n.id === e.target)?.data.nodeType !== 'model');
+      }
+
       const successorPromises = outgoingEdges.map(async (edge) => {
         const nextDrum: DrumPayload = {
           drumId: `drum_${Math.random().toString(36).substr(2, 5)}`,
@@ -457,6 +617,14 @@ export function DashboardLayout() {
       <div className="flex flex-1 min-h-0 overflow-hidden">
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-1 p-1.5 bg-white/80 backdrop-blur-md border border-neutral-200 rounded-full shadow-2xl scale-110">
         <button 
+          onClick={() => setIsSystemModelPanelOpen(!isSystemModelPanelOpen)}
+          title="Toggle System Model Rules"
+          className={`p-2 rounded-full transition-all ${isSystemModelPanelOpen ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-neutral-100 text-neutral-500'}`}
+        >
+          <Settings size={18} />
+        </button>
+        <div className="w-[1px] h-4 bg-neutral-200 mx-1" />
+        <button 
           onClick={() => setIsReeferPanelOpen(!isReeferPanelOpen)}
           title="Toggle Project Reefer (Tree)"
           className={`p-2 rounded-full transition-all ${isReeferPanelOpen ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-neutral-100 text-neutral-500'}`}
@@ -491,6 +659,54 @@ export function DashboardLayout() {
 
       {activeTab === 'blueprint' ? (
           <>
+            {isSystemModelPanelOpen && (
+              <div className="w-80 border-r border-neutral-200 flex flex-col bg-white overflow-y-auto shrink-0 transition-all duration-300">
+                <div className="p-5 border-b border-neutral-200 sticky top-0 z-10 flex justify-between items-center bg-white">
+                  <h2 className="text-[11px] font-black tracking-widest text-indigo-900 uppercase">SYSTEM ARCHITECT</h2>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold text-neutral-500 uppercase">{systemModel.enabled ? 'ON' : 'OFF'}</span>
+                    <button 
+                      onClick={() => setSystemModel(prev => ({ ...prev, enabled: !prev.enabled }))}
+                      className={`w-8 h-4 rounded-full p-0.5 transition-colors ${systemModel.enabled ? 'bg-indigo-600' : 'bg-neutral-300'}`}
+                    >
+                      <div className={`w-3 h-3 bg-white rounded-full transition-transform ${systemModel.enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                </div>
+                <div className="p-5 flex flex-col gap-5">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[9px] font-black tracking-widest text-neutral-500 uppercase">Project Context</label>
+                    <textarea 
+                      value={systemModel.description}
+                      onChange={(e) => setSystemModel(prev => ({ ...prev, description: e.target.value }))}
+                      className="w-full h-24 p-3 bg-neutral-50 border border-neutral-200 rounded text-[11px] font-medium resize-none focus:outline-none focus:border-indigo-500"
+                      placeholder="High-level goal for this project..."
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[9px] font-black tracking-widest text-neutral-500 uppercase">Global Model Rules</label>
+                    <textarea 
+                      value={systemModel.modelRules}
+                      onChange={(e) => setSystemModel(prev => ({ ...prev, modelRules: e.target.value }))}
+                      className="w-full h-32 p-3 bg-neutral-50 border border-neutral-200 rounded text-[11px] font-medium resize-none focus:outline-none focus:border-indigo-500"
+                      placeholder="Rules applied to all creator/expert nodes..."
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[9px] font-black tracking-widest text-neutral-500 uppercase">Auditor Strictness</label>
+                    <textarea 
+                      value={systemModel.auditorRules}
+                      onChange={(e) => setSystemModel(prev => ({ ...prev, auditorRules: e.target.value }))}
+                      className="w-full h-32 p-3 bg-neutral-50 border border-neutral-200 rounded text-[11px] font-medium resize-none focus:outline-none focus:border-purple-500"
+                      placeholder="Specialized constraints for validation engines..."
+                    />
+                  </div>
+                  <div className="text-[10px] text-neutral-400 bg-neutral-50 p-3 rounded border border-neutral-100">
+                    <strong>Note:</strong> When enabled, these rules form the baseline for all node executions in the simulation, overriding node-specific defaults.
+                  </div>
+                </div>
+              </div>
+            )}
             {isReeferPanelOpen && (
               <div className="w-80 border-r border-neutral-200 flex flex-col bg-neutral-50/50 overflow-y-auto shrink-0 transition-all duration-300">
                 <div className="p-5 border-b border-neutral-200 bg-white sticky top-0 z-10 flex justify-between items-center">
@@ -595,6 +811,26 @@ export function DashboardLayout() {
                     </div>
                   </div>
                 ))}
+                
+                <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-neutral-800">
+                  <div className="text-[9px] font-black text-neutral-500 uppercase tracking-widest px-1">TEMPLATES</div>
+                  <div className="flex flex-col gap-1.5">
+                    {[
+                      { id: 'linear', name: 'Success Flow', icon: '🟢' },
+                      { id: 'loop', name: 'Correction Loop', icon: '🔄' },
+                      { id: 'parallel', name: 'Parallel Audit', icon: '🛡️' }
+                    ].map(t => (
+                      <button 
+                        key={t.id}
+                        onClick={() => applyTemplate(t.id)}
+                        className="p-2.5 bg-neutral-800 border border-neutral-700/50 text-[10px] font-bold text-neutral-300 hover:bg-purple-600 hover:text-white hover:border-purple-500 transition-all rounded shadow-sm text-left flex items-center gap-2"
+                      >
+                        <span>{t.icon}</span>
+                        {t.name.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -655,18 +891,7 @@ export function DashboardLayout() {
                        />
                      </div>
 
-                     {inspectedNode.data.nodeType === 'auditor' && (
-                       <div className="flex flex-col gap-4 bg-purple-50 p-4 border border-purple-100 rounded-lg">
-                          <div className="text-[10px] font-black text-purple-600 uppercase tracking-widest flex items-center gap-2">
-                             🛡️ Deterministic Engine
-                          </div>
-                          <p className="text-[12px] text-purple-900/80 font-medium leading-relaxed">
-                            The Auditor node bypassed standard system prompts. It uses <strong className="text-purple-900">Llama 3.3 70B</strong> to strictly evaluate the incoming payload against the Reefer JSON validation rules.
-                          </p>
-                       </div>
-                     )}
-
-                     {inspectedNode.data.nodeType === 'model' && (
+                     {(inspectedNode.data.nodeType === 'model' || inspectedNode.data.nodeType === 'auditor') && (
                        <>
                          <div className="flex flex-col gap-2">
                            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">AI Provider</label>

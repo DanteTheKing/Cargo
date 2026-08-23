@@ -7,9 +7,7 @@ export interface ModelProvider {
 }
 
 export const PROVIDERS: ModelProvider[] = [
-  { id: 'groq', name: 'Groq (Active)', variants: ['meta/llama-3.3-70b', 'meta/llama-3.1-8b', 'qwen/qwen3.6-27b', 'groq/compound', 'groq/compound-mini'] },
-  { id: 'gemini', name: 'Google Gemini', variants: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.0-pro'] },
-  { id: 'anthropic', name: 'Anthropic Claude', variants: ['claude-3-5-sonnet-latest', 'claude-3-opus-latest', 'claude-3-haiku-latest'] },
+  { id: 'groq', name: 'Groq (Active)', variants: ['groq/compound', 'groq/compound-mini'] },
 ];
 
 export type DrumStatus = 'READY' | 'PROCESSING' | 'PENDING' | 'PASS' | 'INTERRUPT' | 'ICE_CORRECTION';
@@ -51,4 +49,10 @@ export interface Session {
   chatInput: string;
   chatHistory: { role: 'user' | 'ai'; content: string }[];
   timestamp: number;
+  systemModel?: {
+    enabled: boolean;
+    description: string;
+    modelRules: string;
+    auditorRules: string;
+  };
 }
