@@ -4,64 +4,12 @@ import { useState, useCallback, useEffect } from 'react';
 import { Node, Edge, Connection, addEdge, useNodesState, useEdgesState } from '@xyflow/react';
 import { AgentCanvas } from './AgentCanvas';
 import { PROVIDERS, DrumStatus, DrumPayload, ReeferSchema, ReeferGrade, Session } from '../types/pipeline';
-import { Database, X, Plus, History, Trash2 } from 'lucide-react';
+import { Database, X, Plus, History, Trash2, Layers, Info, Terminal as TerminalIcon, Layout } from 'lucide-react';
 import Markdown from 'react-markdown';
 
-const initialNodes: Node[] = [
-  {
-    id: 'input_1',
-    type: 'custom',
-    position: { x: 50, y: 150 },
-    data: { nodeType: 'input', label: 'Idea Input', status: 'READY' },
-  },
-  {
-    id: 'model_1',
-    type: 'custom',
-    position: { x: 280, y: 150 },
-    data: { nodeType: 'model', label: 'Primary Reasoning', provider: 'groq', modelVariant: 'llama-3.3-70b-versatile', status: 'READY', temperature: 0.7, systemPrompt: 'Analyze the idea and provide a detailed plan.' },
-  },
-  {
-    id: 'eval_1',
-    type: 'custom',
-    position: { x: 300, y: 50 },
-    data: { nodeType: 'model', label: 'Logic Auditor', provider: 'groq', modelVariant: 'llama-3.3-70b-versatile', status: 'READY', temperature: 0.1, systemPrompt: 'Check for logical fallacies.' },
-  },
-  {
-    id: 'eval_2',
-    type: 'custom',
-    position: { x: 300, y: -50 },
-    data: { nodeType: 'model', label: 'Security Auditor', provider: 'groq', modelVariant: 'llama-3.3-70b-versatile', status: 'READY', temperature: 0.1, systemPrompt: 'Check for PII or data leaks.' },
-  },
-  {
-    id: 'interrupt_1',
-    type: 'custom',
-    position: { x: 550, y: 50 },
-    data: { nodeType: 'interrupt', label: 'Interrupt Trigger', status: 'READY' },
-  },
-  {
-    id: 'signal_1',
-    type: 'custom',
-    position: { x: 550, y: 250 },
-    data: { nodeType: 'signal', label: 'Signal Gate', status: 'READY' },
-  },
-  {
-    id: 'output_1',
-    type: 'custom',
-    position: { x: 800, y: 250 },
-    data: { nodeType: 'output', label: 'Final Output', status: 'READY' },
-  },
-];
+const initialNodes: Node[] = [];
 
-const initialEdges: Edge[] = [
-  { id: 'e1', source: 'input_1', target: 'model_1', type: 'buttonEdge', animated: true, style: { stroke: '#d4d4d8', strokeWidth: 1.5 } },
-  { id: 'e2', source: 'model_1', target: 'eval_1', type: 'buttonEdge', animated: true, style: { stroke: '#d4d4d8', strokeWidth: 1.5 } },
-  { id: 'e2b', source: 'model_1', target: 'eval_2', type: 'buttonEdge', animated: true, style: { stroke: '#d4d4d8', strokeWidth: 1.5 } },
-  { id: 'e3', source: 'model_1', target: 'signal_1', type: 'buttonEdge', animated: true, style: { stroke: '#d4d4d8', strokeWidth: 1.5 } },
-  { id: 'e4', source: 'eval_1', target: 'interrupt_1', type: 'buttonEdge', animated: true, style: { stroke: '#d4d4d8', strokeWidth: 1.5 } },
-  { id: 'e4b', source: 'eval_2', target: 'interrupt_1', type: 'buttonEdge', animated: true, style: { stroke: '#d4d4d8', strokeWidth: 1.5 } },
-  { id: 'e5', source: 'interrupt_1', target: 'signal_1', type: 'buttonEdge', animated: true, style: { stroke: '#ef4444', strokeWidth: 2, strokeDasharray: '5,5' } },
-  { id: 'e6', source: 'signal_1', target: 'output_1', type: 'buttonEdge', animated: true, style: { stroke: '#d4d4d8', strokeWidth: 1.5 } },
-];
+const initialEdges: Edge[] = [];
 
 export function DashboardLayout() {
   const [activeTab, setActiveTab] = useState<'blueprint' | 'chat'>('blueprint');
@@ -69,38 +17,26 @@ export function DashboardLayout() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
-  const [logs, setLogs] = useState<string[]>(['[SYSTEM] Workspace initialized.']);
+  const [logs, setLogs] = useState<string[]>([]);
   const [reefer, setReefer] = useState<ReeferSchema | null>(null);
   const [drumSnapshots, setDrumSnapshots] = useState<Record<string, DrumPayload>>({});
   const [apiResults, setApiResults] = useState<Record<string, string>>({});
   const [isRunning, setIsRunning] = useState(false);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(true);
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isReeferPanelOpen, setIsReeferPanelOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
-  const [sessions, setSessions] = useState<Session[]>(() => {
-    const initial: Session = {
-      id: 'initial',
-      title: 'Initial Session',
-      reefer: null,
-      logs: ['[SYSTEM] Workspace initialized.'],
-      nodes: initialNodes,
-      edges: initialEdges,
-      drumSnapshots: {},
-      chatInput: '',
-      timestamp: Date.now(),
-    };
-    return [initial];
-  });
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>('initial');
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   const createNewSession = () => {
     const newSession: Session = {
       id: Math.random().toString(36).substring(7),
-      title: 'New Session',
+      title: 'Empty Thread',
       reefer: null,
-      logs: ['[SYSTEM] New session initialized.'],
-      nodes: initialNodes,
-      edges: initialEdges,
+      logs: [],
+      nodes: [],
+      edges: [],
       drumSnapshots: {},
       chatInput: '',
       timestamp: Date.now(),
@@ -109,9 +45,9 @@ export function DashboardLayout() {
     setCurrentSessionId(newSession.id);
     
     // Sync local states
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-    setLogs(newSession.logs);
+    setNodes([]);
+    setEdges([]);
+    setLogs([]);
     setReefer(null);
     setDrumSnapshots({});
     setChatInput('');
@@ -467,7 +403,43 @@ export function DashboardLayout() {
       </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {activeTab === 'blueprint' ? (
+        {/* Floating Workspace Control Bar (The Tooltip Pen) */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-1 p-1.5 bg-white/80 backdrop-blur-md border border-neutral-200 rounded-full shadow-2xl scale-110">
+        <button 
+          onClick={() => setIsReeferPanelOpen(!isReeferPanelOpen)}
+          title="Toggle Project Reefer (Tree)"
+          className={`p-2 rounded-full transition-all ${isReeferPanelOpen ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-neutral-100 text-neutral-500'}`}
+        >
+          <Layers size={18} />
+        </button>
+        <div className="w-[1px] h-4 bg-neutral-200 mx-1" />
+        <button 
+          onClick={() => setIsInspectorOpen(!isInspectorOpen)}
+          title="Toggle Node Inspector"
+          className={`p-2 rounded-full transition-all ${isInspectorOpen ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-neutral-100 text-neutral-500'}`}
+        >
+          <Info size={18} />
+        </button>
+        <div className="w-[1px] h-4 bg-neutral-200 mx-1" />
+        <button 
+          onClick={() => setIsTerminalOpen(!isTerminalOpen)}
+          title="Toggle System Terminal"
+          className={`p-2 rounded-full transition-all ${isTerminalOpen ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-neutral-100 text-neutral-500'}`}
+        >
+          <TerminalIcon size={18} />
+        </button>
+        <div className="w-[1px] h-4 bg-neutral-200 mx-1" />
+        <button 
+          onClick={() => setActiveTab(activeTab === 'blueprint' ? 'chat' : 'blueprint')}
+          title="Switch View Mode"
+          className="p-2 rounded-full hover:bg-neutral-100 text-neutral-500 transition-all"
+        >
+          <Layout size={18} />
+        </button>
+      </div>
+
+      {activeTab === 'blueprint' ? (
+
           <>
             {/* Left Panel: Reefer Tree */}
             {isReeferPanelOpen && (
@@ -629,7 +601,8 @@ export function DashboardLayout() {
             </div>
 
             {/* Right Panel: Properties */}
-            <div className="w-80 border-l border-neutral-200 bg-white flex flex-col shrink-0 overflow-y-auto">
+            {isInspectorOpen && (
+              <div className="w-80 border-l border-neutral-200 bg-white flex flex-col shrink-0 overflow-y-auto">
               <div className="p-5 border-b border-neutral-200 bg-white sticky top-0 z-10">
                 <h2 className="text-[11px] font-black tracking-widest text-neutral-900 uppercase">INSPECTOR</h2>
               </div>
@@ -729,6 +702,7 @@ export function DashboardLayout() {
                 <div className="p-10 text-[10px] font-black text-neutral-300 uppercase tracking-[0.3em] text-center mt-10">Select Node or Wire to Inspect</div>
               )}
             </div>
+          )}
           </>
         ) : (
           /* Chat Interface Tab */
@@ -806,20 +780,13 @@ export function DashboardLayout() {
                     </div>
                   ) : (
                     <>
-                      <div className="flex flex-col gap-2">
-                        <div className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em]">Session Context</div>
-                        <div className="p-4 bg-neutral-50 rounded-lg text-[13px] font-medium text-neutral-600 leading-relaxed border border-neutral-100">
-                          This session is currently active. Every run generates or adheres to the <strong>Project Reefer</strong> specified for this specific thread.
+                      <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 opacity-50">
+                        <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-300">
+                          <Plus size={32} />
                         </div>
-                      </div>
-                      <div className="space-y-4">
-                        <div className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em]">Execution Timeline</div>
-                        <div className="space-y-2">
-                           {logs.slice(-5).map((log, i) => (
-                             <div key={i} className="text-[11px] font-mono text-neutral-400 truncate">
-                               {log}
-                             </div>
-                           ))}
+                        <div className="space-y-1">
+                          <p className="text-[14px] font-bold text-neutral-900">Workspace Empty</p>
+                          <p className="text-[12px] text-neutral-500 max-w-[200px]">Describe your project below to initialize the architectural session.</p>
                         </div>
                       </div>
                     </>
