@@ -12,77 +12,83 @@ const initialNodes: Node[] = [];
 const initialEdges: Edge[] = [];
 
 export function DashboardLayout() {
+  const [isHydrated, setIsHydrated] = useState(false);
   const [activeTab, setActiveTab] = useState<'blueprint' | 'chat'>('blueprint');
   
-  const [sessions, setSessions] = useState<Session[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('cargo_sessions');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        } catch (e) {
-          console.error("Failed to parse sessions", e);
-        }
-      }
-    }
-    return [{
-      id: 'initial_thread',
-      title: 'Default Thread',
-      reefer: null,
-      logs: ['[SYSTEM] Session initialized.'],
-      nodes: [],
-      edges: [],
-      drumSnapshots: {},
-      chatInput: '',
-      chatHistory: [],
-      timestamp: Date.now(),
-    }];
-  });
+  const [sessions, setSessions] = useState<Session[]>([{
+    id: 'initial_thread',
+    title: 'Default Thread',
+    reefer: null,
+    logs: ['[SYSTEM] Session initialized.'],
+    nodes: [],
+    edges: [],
+    drumSnapshots: {},
+    chatInput: '',
+    chatHistory: [],
+    timestamp: 0,
+  }]);
 
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      const savedId = localStorage.getItem('cargo_active_session_id');
-      if (savedId) return savedId;
-    }
-    return 'initial_thread';
-  });
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>('initial_thread');
 
   const getInitialValue = <T,>(key: keyof Session, fallback: T): T => {
-    if (typeof window === 'undefined') return fallback;
-    const savedSessions = localStorage.getItem('cargo_sessions');
-    const savedActiveId = localStorage.getItem('cargo_active_session_id');
-    if (savedSessions && savedActiveId) {
-      try {
-        const parsed = JSON.parse(savedSessions);
-        const session = parsed.find((s: any) => s.id === savedActiveId);
-        if (session && session[key] !== undefined) return session[key] as T;
-      } catch (e) {}
-    }
     return fallback;
   };
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(getInitialValue<Node[]>('nodes', []));
-  const [edges, setEdges, onEdgesChange] = useEdgesState(getInitialValue<Edge[]>('edges', []));
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const inspectedNode = nodes.find(n => n.id === selectedNodeId);
   const inspectedEdge = edges.find(e => e.id === selectedEdgeId);
-  const [logs, setLogs] = useState<string[]>(getInitialValue<string[]>('logs', []));
-  const [reefer, setReefer] = useState<ReeferSchema | null>(getInitialValue<ReeferSchema | null>('reefer', null));
-  const [drumSnapshots, setDrumSnapshots] = useState<Record<string, DrumPayload>>(getInitialValue<Record<string, DrumPayload>>('drumSnapshots', {}));
+  const [logs, setLogs] = useState<string[]>(['[SYSTEM] Session initialized.']);
+  const [reefer, setReefer] = useState<ReeferSchema | null>(null);
+  const [drumSnapshots, setDrumSnapshots] = useState<Record<string, DrumPayload>>({});
   const [apiResults, setApiResults] = useState<Record<string, string>>({});
   const [isRunning, setIsRunning] = useState(false);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isReeferPanelOpen, setIsReeferPanelOpen] = useState(false);
-  const [chatInput, setChatInput] = useState(getInitialValue<string>('chatInput', ''));
-  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; content: string }[]>(getInitialValue<{ role: 'user' | 'ai'; content: string }[]>('chatHistory', []));
-  const [systemModel, setSystemModel] = useState<{enabled: boolean, description: string, modelRules: string, auditorRules: string}>(getInitialValue('systemModel', { enabled: false, description: '', modelRules: '', auditorRules: '' }));
+  const [chatInput, setChatInput] = useState('');
+  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; content: string }[]>([]);
+  const [systemModel, setSystemModel] = useState<{enabled: boolean, description: string, modelRules: string, auditorRules: string}>({ enabled: false, description: '', modelRules: '', auditorRules: '' });
   const [isSystemModelPanelOpen, setIsSystemModelPanelOpen] = useState(false);
   const [isDocsOpen, setIsDocsOpen] = useState(false);
   const pendingApprovalsRef = useRef<Record<string, { resolve: (payload: string) => void, currentPayload: string }>>({});
   const [waitingNodesTrigger, setWaitingNodesTrigger] = useState(0);
+
+  // Hydration effect
+  useEffect(() => {
+    const savedSessions = localStorage.getItem('cargo_sessions');
+    const savedActiveId = localStorage.getItem('cargo_active_session_id');
+    
+    if (savedSessions) {
+      try {
+        const parsed = JSON.parse(savedSessions);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const activeId = savedActiveId || parsed[0].id;
+          const session = parsed.find((s: any) => s.id === activeId) || parsed[0];
+          
+          setTimeout(() => {
+            setSessions(parsed);
+            setCurrentSessionId(session.id);
+            setNodes(session.nodes || []);
+            setEdges(session.edges || []);
+            setLogs(session.logs || []);
+            setReefer(session.reefer || null);
+            setDrumSnapshots(session.drumSnapshots || {});
+            setChatInput(session.chatInput || '');
+            setChatHistory(session.chatHistory || []);
+            if (session.systemModel) setSystemModel(session.systemModel);
+            setIsHydrated(true);
+          }, 0);
+          return;
+        }
+      } catch (e) {
+        console.error("Hydration failed", e);
+      }
+    }
+    setTimeout(() => setIsHydrated(true), 0);
+  }, [setNodes, setEdges]);
 
   const switchSession = useCallback((sessionId: string, sessionsList?: Session[]) => {
     const list = sessionsList || sessions;
@@ -625,6 +631,8 @@ export function DashboardLayout() {
 
     setIsRunning(false);
   };
+
+  if (!isHydrated) return null;
 
   return (
     <div className="flex flex-col h-screen w-full bg-white text-neutral-900 overflow-hidden font-sans">
