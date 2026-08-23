@@ -92,12 +92,14 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
   const isSignal = nodeType === 'signal';
   const isInterrupt = nodeType === 'interrupt';
   const isModel = nodeType === 'model';
+  const isAuditor = nodeType === 'auditor';
 
   let bgColor = 'bg-white';
   if (isInput) bgColor = 'bg-blue-50/50';
   if (isOutput) bgColor = 'bg-neutral-900 text-white';
   if (isSignal) bgColor = 'bg-amber-50/50';
   if (isInterrupt) bgColor = 'bg-red-50/50';
+  if (isAuditor) bgColor = 'bg-purple-50/50';
 
   return (
     <div className={`px-5 py-3 rounded-lg border transition-all duration-300 ${statusStyles[data.status as DrumStatus] || statusStyles.READY} ${selected ? 'ring-2 ring-neutral-900 border-transparent shadow-md' : 'shadow-sm'} min-w-[160px] text-left flex flex-col gap-1.5 ${isOutput ? 'bg-neutral-900' : bgColor}`}>

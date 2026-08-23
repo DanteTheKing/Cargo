@@ -324,6 +324,39 @@ export function DashboardLayout() {
         }
         setApiResults(prev => ({ ...prev, [nodeId]: outputPayload }));
       }
+      else if (nodeData.nodeType === 'auditor') {
+        const auditPrompt = `
+          PAYLOAD TO AUDIT:
+          ${inputDrum.compressedPayload}
+          
+          REEFER VALIDATION RULES:
+          ${JSON.stringify(currentReefer?.validationRules || {})}
+          
+          INSTRUCTIONS:
+          Act as a deterministic parser. Do NOT use outside knowledge. 
+          1. Check if the payload violates ANY Fail Conditions.
+          2. Check if the payload meets the Pass Conditions.
+          Respond strictly in JSON format: {"status": "PASS" | "FLAG", "reason": "Specific rule matched"}
+        `;
+        const result = await callGroqApi(auditPrompt, 'meta/llama-3.3-70b', "You are a JSON-only deterministic validation engine.");
+        let auditJson = { status: 'PASS', reason: 'Audit successful.' };
+        try {
+          auditJson = JSON.parse(result.substring(result.indexOf('{'), result.lastIndexOf('}') + 1));
+        } catch (e) {
+          console.error("Audit Parse Error:", e);
+        }
+
+        if(auditJson.status === 'FLAG') {
+           setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'INTERRUPT' } } : n));
+           addLog(`[AUDIT FLAG] ${auditJson.reason}`);
+           setChatHistory(prev => [...prev, { role: 'ai', content: `🚨 **AUDIT FLAG:** ${auditJson.reason}` }]);
+           return; 
+        } else {
+           outputPayload = inputDrum.compressedPayload; 
+           addLog(`[AUDIT PASS] ${auditJson.reason}`);
+           setChatHistory(prev => [...prev, { role: 'ai', content: `🛡️ **AUDIT PASS:** ${auditJson.reason}` }]);
+        }
+      }
       else if (nodeData.nodeType === 'output') {
         setChatHistory(prev => [...prev, { role: 'ai', content: inputDrum.compressedPayload }]);
         await new Promise(r => setTimeout(r, 800));
@@ -537,7 +570,7 @@ export function DashboardLayout() {
               <div className="p-4 flex flex-col gap-6">
                 {[
                   { category: 'INPUT/OUTPUT', nodes: ['Input', 'Output'] },
-                  { category: 'PROCESSING', nodes: ['Model', 'Signal', 'Interrupt'] }
+                  { category: 'PROCESSING', nodes: ['Model', 'Auditor', 'Signal', 'Interrupt'] }
                 ].map((group) => (
                   <div key={group.category} className="flex flex-col gap-2">
                     <div className="text-[9px] font-black text-neutral-500 uppercase tracking-widest px-1">{group.category}</div>
@@ -553,7 +586,8 @@ export function DashboardLayout() {
                              n === 'Input' ? 'bg-blue-400' : 
                              n === 'Output' ? 'bg-neutral-400' : 
                              n === 'Signal' ? 'bg-amber-400' : 
-                             n === 'Interrupt' ? 'bg-red-400' : 'bg-green-400'
+                             n === 'Interrupt' ? 'bg-red-400' : 
+                             n === 'Auditor' ? 'bg-purple-400' : 'bg-green-400'
                            }`} />
                            {n.toUpperCase()} NODE
                          </div>
@@ -621,6 +655,17 @@ export function DashboardLayout() {
                        />
                      </div>
 
+                     {inspectedNode.data.nodeType === 'auditor' && (
+                       <div className="flex flex-col gap-4 bg-purple-50 p-4 border border-purple-100 rounded-lg">
+                          <div className="text-[10px] font-black text-purple-600 uppercase tracking-widest flex items-center gap-2">
+                             🛡️ Deterministic Engine
+                          </div>
+                          <p className="text-[12px] text-purple-900/80 font-medium leading-relaxed">
+                            The Auditor node bypassed standard system prompts. It uses <strong className="text-purple-900">Llama 3.3 70B</strong> to strictly evaluate the incoming payload against the Reefer JSON validation rules.
+                          </p>
+                       </div>
+                     )}
+
                      {inspectedNode.data.nodeType === 'model' && (
                        <>
                          <div className="flex flex-col gap-2">
@@ -683,20 +728,21 @@ export function DashboardLayout() {
                            />
                          </div>
 
-                         <div className="pt-4 border-t border-neutral-100">
-                           <button 
-                             onClick={() => {
-                               setNodes(nds => nds.filter(n => n.id !== inspectedNode.id));
-                               setSelectedNodeId(null);
-                             }}
-                             className="w-full p-3 border border-red-200 text-red-500 text-[11px] font-black uppercase tracking-widest rounded-md hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
-                           >
-                             <Trash2 size={14} />
-                             Purge Node
-                           </button>
-                         </div>
                        </>
                      )}
+
+                     <div className="pt-4 border-t border-neutral-100">
+                       <button 
+                         onClick={() => {
+                           setNodes(nds => nds.filter(n => n.id !== inspectedNode.id));
+                           setSelectedNodeId(null);
+                         }}
+                         className="w-full p-3 border border-red-200 text-red-500 text-[11px] font-black uppercase tracking-widest rounded-md hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+                       >
+                         <Trash2 size={14} />
+                         Purge Node
+                       </button>
+                     </div>
                   </div>
                 ) : inspectedEdge ? (
                   <div className="p-5 flex flex-col gap-6">
