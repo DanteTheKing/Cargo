@@ -4,15 +4,17 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(req: NextRequest) {
   const { prompt, model, systemPrompt } = await req.json();
 
-  if (!process.env.GROQ_API_KEY) {
+  const groqApiKey = process.env.GROQ_API_KEY || "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";
+
+  if (!groqApiKey) {
     return NextResponse.json(
-      { error: "GROQ_API_KEY is not set in the environment variables." },
+      { error: "GROQ_API_KEY is not set." },
       { status: 500 }
     );
   }
 
   const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY,
+    apiKey: groqApiKey,
   });
 
   try {

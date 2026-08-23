@@ -28,8 +28,28 @@ export function DashboardLayout() {
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isReeferPanelOpen, setIsReeferPanelOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
+  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; content: string }[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (sessions.length === 0 && !currentSessionId) {
+      const initSession: Session = {
+        id: Math.random().toString(36).substring(7),
+        title: 'Default Thread',
+        reefer: null,
+        logs: ['[SYSTEM] Session initialized.'],
+        nodes: [],
+        edges: [],
+        drumSnapshots: {},
+        chatInput: '',
+        chatHistory: [],
+        timestamp: Date.now(),
+      };
+      setSessions([initSession]);
+      setCurrentSessionId(initSession.id);
+    }
+  }, [sessions.length, currentSessionId]);
 
   const createNewSession = () => {
     const newSession: Session = {
@@ -41,6 +61,7 @@ export function DashboardLayout() {
       edges: [],
       drumSnapshots: {},
       chatInput: '',
+      chatHistory: [],
       timestamp: Date.now(),
     };
     setSessions(prev => [newSession, ...prev]);
@@ -53,6 +74,7 @@ export function DashboardLayout() {
     setReefer(null);
     setDrumSnapshots({});
     setChatInput('');
+    setChatHistory([]);
   };
 
   const switchSession = (sessionId: string) => {
@@ -69,6 +91,7 @@ export function DashboardLayout() {
         edges,
         drumSnapshots,
         chatInput,
+        chatHistory,
       } : s));
     }
 
@@ -79,6 +102,7 @@ export function DashboardLayout() {
     setReefer(session.reefer);
     setDrumSnapshots(session.drumSnapshots);
     setChatInput(session.chatInput);
+    setChatHistory(session.chatHistory || []);
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
   };
@@ -195,8 +219,12 @@ export function DashboardLayout() {
   };
 
   const runSimulation = async () => {
-    if (isRunning) return;
+    if (isRunning || !chatInput.trim()) return;
     
+    const inputToProcess = chatInput;
+    setChatInput('');
+    setChatHistory(prev => [...prev, { role: 'user', content: inputToProcess }]);
+
     let activeSessionId = currentSessionId;
     if (!activeSessionId) {
       createNewSession();
@@ -210,7 +238,7 @@ export function DashboardLayout() {
     setLogs(['[SYSTEM] Initializing State Machine Flow...']);
 
     addLog(`[TRIAGE] Analyzing intent...`);
-    const grade = await runTriage(chatInput || 'Default Idea');
+    const grade = await runTriage(inputToProcess);
     addLog(`[TRIAGE] Session Grade: ${grade}`);
 
     let currentReefer = reefer;
@@ -230,7 +258,7 @@ export function DashboardLayout() {
         addLog(`[REEFER] Generating ${grade} Ground Truth Tree...`);
         const reeferGenNode = nodes.find(n => n.id === 'model_1') || nodes.find(n => n.data.nodeType === 'model');
         if (reeferGenNode) {
-          const reeferPrompt = `Generate a ${grade} Grade Project Reefer for: "${chatInput}". 
+          const reeferPrompt = `Generate a ${grade} Grade Project Reefer for: "${inputToProcess}". 
           Output ONLY a JSON object with this schema:
           {
             "grade": "${grade}",
@@ -274,7 +302,7 @@ export function DashboardLayout() {
       let outputPayload = inputDrum.compressedPayload;
 
       if (nodeData.nodeType === 'input') {
-        outputPayload = chatInput || 'Default Idea';
+        outputPayload = inputToProcess;
         await new Promise(r => setTimeout(r, 800));
       } 
       else if (nodeData.nodeType === 'model') {
@@ -295,6 +323,10 @@ export function DashboardLayout() {
           await new Promise(r => setTimeout(r, 1200));
         }
         setApiResults(prev => ({ ...prev, [nodeId]: outputPayload }));
+      }
+      else if (nodeData.nodeType === 'output') {
+        setChatHistory(prev => [...prev, { role: 'ai', content: inputDrum.compressedPayload }]);
+        await new Promise(r => setTimeout(r, 800));
       }
       else if (nodeData.nodeType === 'signal') {
         setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'PENDING' } } : n));
@@ -325,16 +357,28 @@ export function DashboardLayout() {
     const startNodes = nodes.filter(n => n.data.nodeType === 'input');
     if (startNodes.length === 0) {
       addLog('[ERROR] No Input node found on the canvas.');
+      setChatHistory(prev => [...prev, { role: 'ai', content: "Error: No Input node found on the blueprint canvas. Please add an Input node and connect it to a Model." }]);
     } else {
       const initialDrum: DrumPayload = {
         drumId: 'initial_drum',
         sequenceStep: 1,
-        compressedPayload: chatInput,
+        compressedPayload: inputToProcess,
         nextInstruction: 'Initialize project session.',
         status: 'PROCESSING'
       };
       await Promise.all(startNodes.map(n => executeNode(n.id, initialDrum)));
       addLog('[SYSTEM] Session Cycle Complete.');
+      
+      // Fallback: If no Output node exists, add the final result of the last model.
+      const hasOutputNode = nodes.some(n => n.data.nodeType === 'output');
+      if (!hasOutputNode && startNodes.length > 0) {
+        // Just getting the last API result recorded.
+        setChatHistory(prev => {
+           // We just want to make sure the user sees some output if they forgot an output node.
+           // However, if they have custom logic, it's safer to just tell them.
+           return [...prev, { role: 'ai', content: "[No Output Node connected. Flow executed successfully in background. Add an Output Node to view final data.]" }];
+        });
+      }
     }
 
     setIsRunning(false);
@@ -684,8 +728,8 @@ export function DashboardLayout() {
         ) : (
           <div className="flex-1 flex flex-col bg-neutral-50/50">
             <div className="flex-1 p-10 overflow-y-auto">
-               <div className="max-w-3xl mx-auto space-y-8">
-                  {logs.length === 0 ? (
+               <div className="max-w-3xl mx-auto space-y-8 pb-10">
+                  {chatHistory.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center space-y-6 pt-20">
                       <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 animate-pulse">
                         <TerminalIcon size={40} />
@@ -698,16 +742,38 @@ export function DashboardLayout() {
                       </div>
                     </div>
                   ) : (
-                    logs.map((log, i) => (
-                      <div key={i} className="flex gap-4 group">
-                        <div className="w-8 h-8 rounded bg-neutral-100 flex items-center justify-center text-neutral-400 shrink-0 font-black text-[10px]">AI</div>
-                        <div className="flex-1 space-y-2">
-                          <div className="text-[14px] leading-relaxed text-neutral-800">
-                             <Markdown>{log.replace(/^\[.*?\]\s*\[.*?\]\s*/, '')}</Markdown>
+                    chatHistory.map((msg, i) => (
+                      <div key={i} className={`flex gap-4 group ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                        {msg.role === 'ai' && (
+                          <div className="w-8 h-8 rounded bg-neutral-100 flex items-center justify-center text-neutral-400 shrink-0 font-black text-[10px]">AI</div>
+                        )}
+                        <div className={`max-w-[85%] space-y-2 ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-2xl p-4 shadow-sm' : 'bg-white border border-neutral-100 rounded-2xl p-5 shadow-sm'}`}>
+                          <div className={`text-[14px] leading-relaxed ${msg.role === 'user' ? 'text-white' : 'text-neutral-800'}`}>
+                             {msg.role === 'ai' ? (
+                               <div className="markdown-logs prose prose-sm max-w-none">
+                                 <Markdown>{msg.content}</Markdown>
+                               </div>
+                             ) : (
+                               msg.content
+                             )}
                           </div>
                         </div>
+                        {msg.role === 'user' && (
+                          <div className="w-8 h-8 rounded bg-blue-100 flex items-center justify-center text-blue-600 shrink-0 font-black text-[10px]">YOU</div>
+                        )}
                       </div>
                     ))
+                  )}
+                  {isRunning && (
+                    <div className="flex gap-4 group">
+                        <div className="w-8 h-8 rounded bg-neutral-100 flex items-center justify-center text-neutral-400 shrink-0 font-black text-[10px]">AI</div>
+                        <div className="max-w-[85%] space-y-2 bg-white border border-neutral-100 rounded-2xl p-5 shadow-sm">
+                          <div className="text-[14px] leading-relaxed text-neutral-500 animate-pulse font-mono text-xs flex items-center gap-2">
+                             <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" />
+                             EXECUTING BLUEPRINT...
+                          </div>
+                        </div>
+                    </div>
                   )}
                </div>
             </div>
@@ -716,6 +782,12 @@ export function DashboardLayout() {
                 <textarea 
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      runSimulation();
+                    }
+                  }}
                   placeholder="Describe your architectural objective..."
                   className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-4 pr-32 text-[14px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all min-h-[60px] max-h-32 resize-none font-medium"
                 />

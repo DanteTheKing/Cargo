@@ -49,5 +49,6 @@ export interface Session {
   edges: Edge[];
   drumSnapshots: Record<string, DrumPayload>;
   chatInput: string;
+  chatHistory: { role: 'user' | 'ai'; content: string }[];
   timestamp: number;
 }
