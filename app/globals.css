@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+.markdown-logs p {
+  margin-bottom: 0.5rem;
+}
+.markdown-logs p:last-child {
+  margin-bottom: 0;
+}
+.markdown-logs ul, .markdown-logs ol {
+  margin-left: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+.markdown-logs li {
+  list-style-type: disc;
+}
+.markdown-logs pre {
+  background: #0a0a0a;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  border: 1px solid #262626;
+}
+.markdown-logs code {
+  background: #171717;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  font-family: monospace;
+  color: #fbbf24;
+}
