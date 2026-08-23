@@ -38,7 +38,6 @@ export function DashboardLayout() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const visibleEdges = edges.map(e => ({ ...e, animated: isPathVisible || e.animated }));
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const inspectedNode = nodes.find(n => n.id === selectedNodeId);
@@ -49,6 +48,7 @@ export function DashboardLayout() {
   const [apiResults, setApiResults] = useState<Record<string, string>>({});
   const [isRunning, setIsRunning] = useState(false);
   const [isPathVisible, setIsPathVisible] = useState(false);
+  const visibleEdges = edges.map(e => ({ ...e, animated: isPathVisible || e.animated }));
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isReeferPanelOpen, setIsReeferPanelOpen] = useState(false);
