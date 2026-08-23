@@ -25,7 +25,7 @@ import '@xyflow/react/dist/style.css';
 import { DrumStatus } from '../types/pipeline';
 import { Trash2 } from 'lucide-react';
 
-const statusStyles: Record<DrumStatus, string> = {
+export const statusStyles: Record<DrumStatus, string> = {
   READY: 'border-neutral-200 bg-white text-neutral-900',
   PROCESSING: 'border-blue-500 bg-blue-50 text-blue-900',
   PENDING: 'border-amber-400 bg-amber-50 text-amber-900 animate-pulse',
@@ -34,7 +34,7 @@ const statusStyles: Record<DrumStatus, string> = {
   PENDING_APPROVAL: 'border-cyan-500 bg-cyan-50 text-cyan-900 animate-pulse',
 };
 
-const ButtonEdge = ({
+export const ButtonEdge = ({
   id,
   sourceX,
   sourceY,
@@ -85,7 +85,7 @@ const ButtonEdge = ({
   );
 };
 
-const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
+export const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
   const nodeType = data.nodeType || 'model';
   const isInput = nodeType === 'input';
   const isOutput = nodeType === 'output';
@@ -144,11 +144,11 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
   );
 };
 
-const nodeTypes = {
+export const nodeTypes = {
   custom: CustomNode,
 };
 
-const edgeTypes = {
+export const edgeTypes = {
   buttonEdge: ButtonEdge,
 };
 

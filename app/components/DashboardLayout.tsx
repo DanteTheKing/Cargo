@@ -178,59 +178,6 @@ export function DashboardLayout() {
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
   };
 
-  const applyTemplate = (templateId: string) => {
-    let newNodes: Node[] = [];
-    let newEdges: Edge[] = [];
-
-    if (templateId === 'linear') {
-      newNodes = [
-        { id: 't-in', type: 'custom', position: { x: 100, y: 100 }, data: { nodeType: 'input', label: 'Objective', status: 'READY' } },
-        { id: 't-mod', type: 'custom', position: { x: 350, y: 100 }, data: { nodeType: 'model', label: 'Architect', status: 'READY', provider: 'groq', modelVariant: 'groq/compound', temperature: 0.7, systemPrompt: 'Generate a technical blueprint.' } },
-        { id: 't-aud', type: 'custom', position: { x: 600, y: 100 }, data: { nodeType: 'auditor', label: 'Compliance', status: 'READY', provider: 'groq', modelVariant: 'groq/compound-mini', temperature: 0.1, systemPrompt: 'Verify technical accuracy.' } },
-        { id: 't-out', type: 'custom', position: { x: 850, y: 100 }, data: { nodeType: 'output', label: 'Deployment', status: 'READY' } },
-      ];
-      newEdges = [
-        { id: 'e1', source: 't-in', target: 't-mod', type: 'buttonEdge', animated: true },
-        { id: 'e2', source: 't-mod', target: 't-aud', type: 'buttonEdge', animated: true },
-        { id: 'e3', source: 't-aud', target: 't-out', type: 'buttonEdge', animated: true },
-      ];
-    } else if (templateId === 'loop') {
-      newNodes = [
-        { id: 't-in', type: 'custom', position: { x: 100, y: 100 }, data: { nodeType: 'input', label: 'Objective', status: 'READY' } },
-        { id: 't-mod', type: 'custom', position: { x: 350, y: 100 }, data: { nodeType: 'model', label: 'Creator', status: 'READY', provider: 'groq', modelVariant: 'groq/compound', temperature: 0.7, systemPrompt: 'Draft content based on input.' } },
-        { id: 't-aud', type: 'custom', position: { x: 350, y: 300 }, data: { nodeType: 'auditor', label: 'Safety Auditor', status: 'READY', provider: 'groq', modelVariant: 'groq/compound-mini', temperature: 0.1, systemPrompt: 'Audit content for safety and tone.' } },
-        { id: 't-out', type: 'custom', position: { x: 600, y: 100 }, data: { nodeType: 'output', label: 'Final Approval', status: 'READY' } },
-      ];
-      newEdges = [
-        { id: 'e1', source: 't-in', target: 't-mod', type: 'buttonEdge', animated: true },
-        { id: 'e2', source: 't-mod', target: 't-aud', type: 'buttonEdge', animated: true },
-        { id: 'e3', source: 't-aud', target: 't-mod', type: 'buttonEdge', animated: true, label: 'ICE RE-ENTRY', style: { stroke: '#f59e0b' } },
-        { id: 'e4', source: 't-aud', target: 't-out', type: 'buttonEdge', animated: true },
-      ];
-    } else if (templateId === 'parallel') {
-      newNodes = [
-        { id: 't-in', type: 'custom', position: { x: 100, y: 200 }, data: { nodeType: 'input', label: 'Core Input', status: 'READY' } },
-        { id: 't-mod1', type: 'custom', position: { x: 350, y: 100 }, data: { nodeType: 'model', label: 'Expert A', status: 'READY', provider: 'groq', modelVariant: 'groq/compound', temperature: 0.7, systemPrompt: 'Analyze from Perspective A.' } },
-        { id: 't-mod2', type: 'custom', position: { x: 350, y: 300 }, data: { nodeType: 'model', label: 'Expert B', status: 'READY', provider: 'groq', modelVariant: 'groq/compound', temperature: 0.7, systemPrompt: 'Analyze from Perspective B.' } },
-        { id: 't-sig', type: 'custom', position: { x: 600, y: 200 }, data: { nodeType: 'signal', label: 'Consensus', status: 'READY' } },
-        { id: 't-aud', type: 'custom', position: { x: 800, y: 200 }, data: { nodeType: 'auditor', label: 'Conflict Resolver', status: 'READY', provider: 'groq', modelVariant: 'groq/compound-mini', temperature: 0.1, systemPrompt: 'Resolve any conflicts in data.' } },
-        { id: 't-out', type: 'custom', position: { x: 1000, y: 200 }, data: { nodeType: 'output', label: 'Unified Output', status: 'READY' } },
-      ];
-      newEdges = [
-        { id: 'e1', source: 't-in', target: 't-mod1', type: 'buttonEdge', animated: true },
-        { id: 'e2', source: 't-in', target: 't-mod2', type: 'buttonEdge', animated: true },
-        { id: 'e3', source: 't-mod1', target: 't-sig', type: 'buttonEdge', animated: true },
-        { id: 'e4', source: 't-mod2', target: 't-sig', type: 'buttonEdge', animated: true },
-        { id: 'e5', source: 't-sig', target: 't-aud', type: 'buttonEdge', animated: true },
-        { id: 'e6', source: 't-aud', target: 't-out', type: 'buttonEdge', animated: true },
-      ];
-    }
-
-    setNodes(newNodes);
-    setEdges(newEdges);
-    addLog(`[TEMPLATE] Applied ${templateId.toUpperCase()} configuration.`);
-  };
-
   const onConnect = useCallback(
     (params: Connection | Edge) => setEdges((eds) => addEdge({ ...params, type: 'buttonEdge', animated: true, style: { stroke: '#d4d4d8', strokeWidth: 1.5 } } as any, eds)),
     [setEdges]
@@ -911,26 +858,6 @@ export function DashboardLayout() {
                     </div>
                   </div>
                 ))}
-                
-                <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-neutral-800">
-                  <div className="text-[9px] font-black text-neutral-500 uppercase tracking-widest px-1">TEMPLATES</div>
-                  <div className="flex flex-col gap-1.5">
-                    {[
-                      { id: 'linear', name: 'Success Flow', icon: '🟢' },
-                      { id: 'loop', name: 'Correction Loop', icon: '🔄' },
-                      { id: 'parallel', name: 'Parallel Audit', icon: '🛡️' }
-                    ].map(t => (
-                      <button 
-                        key={t.id}
-                        onClick={() => applyTemplate(t.id)}
-                        className="p-2.5 bg-neutral-800 border border-neutral-700/50 text-[10px] font-bold text-neutral-300 hover:bg-purple-600 hover:text-white hover:border-purple-500 transition-all rounded shadow-sm text-left flex items-center gap-2"
-                      >
-                        <span>{t.icon}</span>
-                        {t.name.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
 
