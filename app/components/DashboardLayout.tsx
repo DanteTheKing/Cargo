@@ -652,13 +652,29 @@ export function DashboardLayout() {
           <Info size={18} />
         </button>
         <div className="w-[1px] h-4 bg-neutral-200 mx-1" />
-        <button 
+        <motion.button 
           onClick={() => setIsDocsOpen(!isDocsOpen)}
-          title="Toggle Documentation"
-          className={`p-2 rounded-full transition-all ${isDocsOpen ? 'bg-amber-600 text-white shadow-md' : 'hover:bg-neutral-100 text-neutral-500'}`}
+          title="Operations Manual & Blueprints"
+          animate={!isDocsOpen ? {
+            boxShadow: [
+              "0 0 0 0px rgba(245, 158, 11, 0)",
+              "0 0 0 8px rgba(245, 158, 11, 0.2)",
+              "0 0 0 0px rgba(245, 158, 11, 0)"
+            ],
+            scale: [1, 1.05, 1]
+          } : {}}
+          transition={{
+            duration: 2,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          className={`relative p-2 rounded-full transition-all ${isDocsOpen ? 'bg-amber-600 text-white shadow-md' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
         >
           <BookOpen size={18} />
-        </button>
+          {!isDocsOpen && (
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full border border-white animate-ping" />
+          )}
+        </motion.button>
         <div className="w-[1px] h-4 bg-neutral-200 mx-1" />
         <button 
           onClick={() => setIsTerminalOpen(!isTerminalOpen)}
@@ -1123,10 +1139,18 @@ export function DashboardLayout() {
         isOpen={isDocsOpen} 
         onClose={() => setIsDocsOpen(false)} 
         onLoadExample={(newNodes, newEdges) => {
-          setNodes(newNodes);
-          setEdges(newEdges);
-          setIsDocsOpen(false);
-          setActiveTab('blueprint');
+          try {
+            setSelectedNodeId(null);
+            setSelectedEdgeId(null);
+            setNodes(newNodes);
+            setEdges(newEdges);
+            setIsDocsOpen(false);
+            setActiveTab('blueprint');
+            addLog(`[SYSTEM] Loaded blueprint template from Operations Manual.`);
+          } catch (err) {
+            console.error('Blueprint injection failed:', err);
+            addLog(`[ERROR] Blueprint injection failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+          }
         }} 
       />
     </div>
