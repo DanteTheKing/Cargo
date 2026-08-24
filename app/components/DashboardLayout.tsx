@@ -203,7 +203,7 @@ export function DashboardLayout() {
     setEdges((eds) =>
       eds.map((edge) => {
         if (edge.id === id) {
-           const isSignal = newData.isSignal;
+           const isSignal = newData.isSignal || (newData.label && (newData.label.toUpperCase() === 'REJECTION' || newData.label.toUpperCase() === 'ICE'));
            return { 
              ...edge, 
              data: { ...edge.data, ...newData },
@@ -497,10 +497,6 @@ export function DashboardLayout() {
       else if (nodeData.nodeType === 'output') {
         setChatHistory(prev => [...prev, { role: 'ai', content: inputDrum.compressedPayload }]);
         await new Promise(r => setTimeout(r, 800));
-      }
-      else if (nodeData.nodeType === 'signal') {
-        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'PENDING' } } : n));
-        await new Promise(r => setTimeout(r, 1000));
       }
       else if (nodeData.nodeType === 'tool') {
         const toolType = (nodeData.toolType || 'TRANSFORM').toUpperCase();
@@ -942,7 +938,7 @@ export function DashboardLayout() {
               <div className="p-4 flex flex-col gap-6">
                 {[
                   { category: 'INPUT/OUTPUT', nodes: ['Input', 'Wait', 'Output'] },
-                  { category: 'PROCESSING', nodes: ['Model', 'Auditor', 'Router', 'Tool', 'Signal'] }
+                  { category: 'PROCESSING', nodes: ['Model', 'Auditor', 'Router', 'Tool'] }
                 ].map((group) => (
                   <div key={group.category} className="flex flex-col gap-2">
                     <div className="text-[9px] font-black text-neutral-500 uppercase tracking-widest px-1">{group.category}</div>
@@ -958,7 +954,6 @@ export function DashboardLayout() {
                              n === 'Input' ? 'bg-blue-400' : 
                              n === 'Output' ? 'bg-neutral-400' : 
                              n === 'Wait' ? 'bg-cyan-400' : 
-                             n === 'Signal' ? 'bg-amber-400' : 
                              n === 'Auditor' ? 'bg-purple-400' : 
                              n === 'Router' ? 'bg-fuchsia-400' : 
                              n === 'Tool' ? 'bg-emerald-400' : 'bg-green-400'

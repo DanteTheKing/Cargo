@@ -45,7 +45,7 @@ const EXAMPLES: Record<string, { title: string; desc: string; nodes: Node[]; edg
       { id: 'n1', type: 'custom', position: { x: 50, y: 150 }, data: { nodeType: 'input', label: 'Requirement', status: 'READY' } },
       { id: 'n2', type: 'custom', position: { x: 250, y: 150 }, data: { nodeType: 'model', label: 'Generator', status: 'READY', provider: 'groq', modelVariant: 'groq/compound' } },
       { id: 'n3', type: 'custom', position: { x: 500, y: 150 }, data: { nodeType: 'auditor', label: 'Logic Auditor', status: 'READY', provider: 'groq', modelVariant: 'groq/compound-mini' } },
-      { id: 'n4', type: 'custom', position: { x: 750, y: 150 }, data: { nodeType: 'signal', label: 'Approval Gate', status: 'READY' } },
+      { id: 'n4', type: 'custom', position: { x: 750, y: 150 }, data: { nodeType: 'output', label: 'Approved Result', status: 'READY' } },
       { id: 'n5', type: 'custom', position: { x: 1000, y: 150 }, data: { nodeType: 'output', label: 'Verified Output', status: 'READY' } }
     ],
     edges: [
@@ -353,7 +353,7 @@ export function ManualOverlay({ isOpen, onClose, onLoadExample }: ManualOverlayP
           </div>
           <div>
             <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-1">Architectural Insight</p>
-            <p className="text-sm text-neutral-600 font-medium italic">This configuration utilizes the &ldquo;Signal Standby&rdquo; pattern to prevent uncontrolled model output leakage.</p>
+
           </div>
         </div>
       </div>

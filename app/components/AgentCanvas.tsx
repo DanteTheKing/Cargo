@@ -98,7 +98,6 @@ export const CustomNode = ({ data, selected }: { data: any; selected: boolean })
   const nodeType = data.nodeType || 'model';
   const isInput = nodeType === 'input';
   const isOutput = nodeType === 'output';
-  const isSignal = nodeType === 'signal';
   const isModel = nodeType === 'model';
   const isAuditor = nodeType === 'auditor';
   const isWait = nodeType === 'wait';
@@ -108,7 +107,6 @@ export const CustomNode = ({ data, selected }: { data: any; selected: boolean })
   let bgColor = 'bg-white';
   if (isInput) bgColor = 'bg-blue-50/50';
   if (isOutput) bgColor = 'bg-neutral-900 text-white';
-  if (isSignal) bgColor = 'bg-amber-50/50';
   if (isAuditor) bgColor = 'bg-purple-50/50';
   if (isWait) bgColor = 'bg-cyan-50/50';
   if (isRouter) bgColor = 'bg-fuchsia-50/50';
