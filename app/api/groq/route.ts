@@ -3,8 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   const { prompt, model, systemPrompt } = await req.json();
-
-  const groqApiKey = process.env.GROQ_API_KEY || "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";
+  const groqApiKey = process.env.GROQ_API_KEY;
 
   if (!groqApiKey) {
     return NextResponse.json(
@@ -18,6 +17,15 @@ export async function POST(req: NextRequest) {
   });
 
   try {
+    // Resolve model name
+    let selectedModel = model || "llama-3.1-70b-versatile";
+    if (selectedModel.includes('compound')) {
+      selectedModel = "llama-3.1-70b-versatile";
+    }
+    if (selectedModel.includes('mini')) {
+      selectedModel = "llama-3.1-8b-instant";
+    }
+
     const chatCompletion = await groq.chat.completions.create({
       messages: [
         {
@@ -29,7 +37,7 @@ export async function POST(req: NextRequest) {
           content: prompt,
         },
       ],
-      model: model || "groq/compound",
+      model: selectedModel,
     });
 
     return NextResponse.json({

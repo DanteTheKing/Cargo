@@ -235,48 +235,27 @@ export function DashboardLayout() {
   const callGroqApi = async (prompt: string, model: string, systemPrompt: string, reeferContext?: ReeferSchema) => {
     try {
       const markdownNote = "\n\nNOTE: The chat terminal supports MARKDOWN. Use it for code, bolding, and structure.";
-      const fullSystemPrompt = reeferContext 
-        ? `${systemPrompt}${markdownNote}\n\nSTRICT PROJECT REEFER (${reeferContext.grade} GRADE):\n${JSON.stringify(reeferContext, null, 2)}\n\nIMPORTANT: Adhere strictly to these boundaries. Do not include excluded features.`
-        : `${systemPrompt}${markdownNote}`;
-
-      const response = await fetch('/api/groq', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, model, systemPrompt: fullSystemPrompt }),
-      });
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
-      return data.text;
-    } catch (err: any) {
-      addLog(`[ERROR] Groq API: ${err.message}`);
-      return `Error: ${err.message}`;
-    }
-  };
-
-  const callGeminiApi = async (prompt: string, model: string, systemPrompt: string, reeferContext?: ReeferSchema) => {
-    try {
-      const markdownNote = "\n\nNOTE: The chat terminal supports MARKDOWN. Use it for code, bolding, and structure.";
       const tokenNote = "\n\nCRITICAL: Be extremely brief. Use bullet points. Maximum 150 words.";
       const fullSystemPrompt = reeferContext 
         ? `${systemPrompt}${markdownNote}${tokenNote}\n\nSTRICT PROJECT REEFER (${reeferContext.grade} GRADE):\n${JSON.stringify(reeferContext, null, 2)}\n\nIMPORTANT: Adhere strictly to these boundaries. Do not include excluded features.`
         : `${systemPrompt}${markdownNote}${tokenNote}`;
 
-      const response = await fetch('/api/gemini', {
+      const response = await fetch('/api/groq', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, model, systemPrompt: fullSystemPrompt }),
+        body: JSON.stringify({ prompt, model: model.replace('gemini-', 'llama-'), systemPrompt: fullSystemPrompt }),
       });
       const data = await response.json();
       if (data.error) {
         if (data.error.includes('API_KEY')) {
-          addLog(`[SIMULATION MODE] Gemini API Key missing. Using bypass.`);
-          return "Simulation result: The AI would provide a structured response here if a Gemini API key was provided in settings.";
+          addLog(`[SIMULATION MODE] Groq API Key missing. Using bypass.`);
+          return "Simulation result: The AI would provide a structured response here if a Groq API key was provided in settings.";
         }
         throw new Error(data.error);
       }
       return data.text;
     } catch (err: any) {
-      addLog(`[ERROR] Gemini API: ${err.message}`);
+      addLog(`[ERROR] Groq API: ${err.message}`);
       return `Error: ${err.message}`;
     }
   };
@@ -291,7 +270,7 @@ export function DashboardLayout() {
     
     Output ONLY the grade name (CASUAL, STANDARD, or PRODUCTION).`;
 
-    const result = await callGeminiApi(triagePrompt, 'gemini-1.5-flash', "You are a triage system.");
+    const result = await callGroqApi(triagePrompt, 'llama-3.1-8b-instant', "You are a triage system.");
     const cleaned = result.trim().toUpperCase();
     if (cleaned.includes('PRODUCTION')) return 'PRODUCTION';
     if (cleaned.includes('STANDARD')) return 'STANDARD';
@@ -352,7 +331,7 @@ export function DashboardLayout() {
           "validationRules": { "passConditions": string[], "failConditions": string[] }
         }`;
         
-        const result = await callGroqApi(reeferPrompt, 'groq/compound', "You are a senior systems architect. Return ONLY raw JSON without markdown formatting.");
+        const result = await callGroqApi(reeferPrompt, 'llama-3.1-70b-versatile', "You are a senior systems architect. Return ONLY raw JSON without markdown formatting.");
         try {
           const parsed = JSON.parse(result.substring(result.indexOf('{'), result.lastIndexOf('}') + 1));
           parsed.grade = grade;
@@ -411,10 +390,10 @@ export function DashboardLayout() {
         }
 
         const startTime = Date.now();
-        if (nodeData.provider === 'groq') {
-          outputPayload = await callGroqApi(prompt, nodeData.modelVariant as string, systemPrompt, currentReefer || undefined);
-        } else if (nodeData.provider === 'gemini') {
-          outputPayload = await callGeminiApi(prompt, nodeData.modelVariant as string, systemPrompt, currentReefer || undefined);
+        if (nodeData.provider === 'groq' || nodeData.provider === 'gemini') {
+          // Force use Groq since Gemini is disabled by user mandate
+          const variant = nodeData.modelVariant?.includes('gemini') ? 'llama-3.1-70b-versatile' : (nodeData.modelVariant as string);
+          outputPayload = await callGroqApi(prompt, variant, systemPrompt, currentReefer || undefined);
         } else {
           await new Promise(r => setTimeout(r, 1200));
         }
@@ -464,7 +443,7 @@ export function DashboardLayout() {
         auditPrompt += `\n\nRespond strictly in JSON format: {"status": "PASS" | "FLAG", "reason": "Specific rule matched"}`;
         
         const startTime = Date.now();
-        const result = await callGroqApi(auditPrompt, nodeData.modelVariant || 'groq/compound-mini', "You are a JSON-only deterministic validation engine.");
+        const result = await callGroqApi(auditPrompt, nodeData.modelVariant || 'llama-3.1-8b-instant', "You are a JSON-only deterministic validation engine.");
         const latency = Date.now() - startTime;
         addLog(`[TELEMETRY] Auditor Node ${label} completed in ${latency}ms`);
         let auditJson = { status: 'PASS', reason: 'Audit successful.' };
@@ -541,7 +520,7 @@ export function DashboardLayout() {
           else if (toolType === 'SUMMARY') {
             addLog(`[TOOL] Generating payload digest...`);
             const summaryPrompt = `Summarize the following payload into a 1-2 sentence digest for the next node in the chain:\n\n${inputDrum.compressedPayload}`;
-            outputPayload = await callGroqApi(summaryPrompt, 'groq/compound-mini', "You are a text compression utility.");
+            outputPayload = await callGroqApi(summaryPrompt, 'llama-3.1-8b-instant', "You are a text compression utility.");
           }
           else if (toolType === 'EXTRACT_CODE') {
             const raw = inputDrum.compressedPayload;
@@ -591,7 +570,7 @@ export function DashboardLayout() {
            Output ONLY a JSON object: {"edgeId": "the_chosen_edge_id", "reasoning": "Brief explanation"}`;
 
            const startTime = Date.now();
-           const result = await callGroqApi(routerPrompt, 'groq/compound-mini', "You are a deterministic routing logic gate. Return ONLY valid JSON.");
+           const result = await callGroqApi(routerPrompt, 'llama-3.1-8b-instant', "You are a deterministic routing logic gate. Return ONLY valid JSON.");
            const latency = Date.now() - startTime;
            addLog(`[TELEMETRY] Router Node ${label} completed in ${latency}ms`);
 
@@ -1290,59 +1269,53 @@ export function DashboardLayout() {
       />
 
       {isTutorialActive && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-auto">
-          {/* Backdrop blocking background clicks */}
-          <div className="absolute inset-0 bg-neutral-950/40 backdrop-blur-[2px]" />
-          
+        <div className="fixed bottom-24 left-8 z-[500] pointer-events-none">
           <motion.div 
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-neutral-200 p-8 flex flex-col gap-6"
+            initial={{ opacity: 0, x: -20, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            className="pointer-events-auto w-80 bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-neutral-200/50 p-6 flex flex-col gap-4"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                <span className="text-[10px] font-black tracking-widest text-blue-600 uppercase">Guided Tour: Step {tutorialStep} / 5</span>
+                <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span className="text-[10px] font-black tracking-widest text-amber-600 uppercase">Tour Companion: {tutorialStep} / 5</span>
               </div>
               <button 
                 onClick={() => setShowQuitConfirm(true)}
                 className="p-1 hover:bg-neutral-100 rounded-full transition-colors"
               >
-                <X size={16} className="text-neutral-400" />
+                <X size={14} className="text-neutral-400" />
               </button>
             </div>
 
             {tutorialStep === 1 && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-black tracking-tight text-neutral-900">Welcome to CARGO</h3>
-                <p className="text-sm text-neutral-600 leading-relaxed">
-                  You&apos;re looking at a deterministic AI orchestration engine. Let&apos;s see how we build an autonomous swarm in under 2 minutes.
+              <div className="space-y-3">
+                <h3 className="text-sm font-black tracking-tight text-neutral-900">Welcome to CARGO</h3>
+                <p className="text-[11px] text-neutral-600 leading-relaxed">
+                  This is a deterministic AI orchestration engine. I&apos;ll help you build an autonomous swarm in real-time.
                 </p>
                 <button 
                   onClick={nextStep}
-                  className="w-full bg-neutral-900 hover:bg-neutral-800 text-white py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all"
+                  className="w-full bg-neutral-900 hover:bg-neutral-800 text-white py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all"
                 >
-                  Let&apos;s Start
+                  Start Guide
                 </button>
               </div>
             )}
 
             {tutorialStep === 2 && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-black tracking-tight text-neutral-900">1. Blueprinting</h3>
-                <p className="text-sm text-neutral-600 leading-relaxed">
-                  Workflows start with a Blueprint. I&apos;ve just loaded a <strong>Self-Correcting Auditor</strong> loop for you. 
+              <div className="space-y-3">
+                <h3 className="text-sm font-black tracking-tight text-neutral-900">Step 1: Inject Blueprint</h3>
+                <p className="text-[11px] text-neutral-600 leading-relaxed">
+                  Let&apos;s load a <strong>Self-Correcting Auditor</strong> loop. This pattern ensures the AI fixes its own errors.
                 </p>
-                <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-100 text-[10px] font-medium text-neutral-500 italic">
-                  Note: The Auditor will loop back to the Model if it detects errors in the output.
-                </div>
                 <button 
                   onClick={() => {
                     const ex = {
                       nodes: [
                         { id: 'n1', type: 'custom', position: { x: 50, y: 150 }, data: { nodeType: 'input', label: 'Requirement', status: 'READY' } },
-                        { id: 'n2', type: 'custom', position: { x: 250, y: 150 }, data: { nodeType: 'model', label: 'Generator', status: 'READY', provider: 'gemini', modelVariant: 'gemini-1.5-flash' } },
-                        { id: 'n3', type: 'custom', position: { x: 500, y: 150 }, data: { nodeType: 'auditor', label: 'QA Auditor', status: 'READY', provider: 'gemini', modelVariant: 'gemini-1.5-flash' } },
+                        { id: 'n2', type: 'custom', position: { x: 250, y: 150 }, data: { nodeType: 'model', label: 'Generator', status: 'READY', provider: 'groq', modelVariant: 'llama-3.1-70b-versatile' } },
+                        { id: 'n3', type: 'custom', position: { x: 500, y: 150 }, data: { nodeType: 'auditor', label: 'QA Auditor', status: 'READY', provider: 'groq', modelVariant: 'llama-3.1-8b-instant' } },
                         { id: 'n4', type: 'custom', position: { x: 750, y: 150 }, data: { nodeType: 'output', label: 'Verified Result', status: 'READY' } }
                       ],
                       edges: [
@@ -1356,36 +1329,36 @@ export function DashboardLayout() {
                     setEdges(ex.edges);
                     nextStep();
                   }}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-blue-200"
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg shadow-blue-100"
                 >
-                  Inject Blueprint
+                  Load Logic
                 </button>
               </div>
             )}
 
             {tutorialStep === 3 && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-black tracking-tight text-neutral-900">2. Swarm Execution</h3>
-                <p className="text-sm text-neutral-600 leading-relaxed">
-                  We launch the swarm from the Chat Terminal. It interprets your request and sends a &ldquo;Drum&rdquo; through the nodes.
+              <div className="space-y-3">
+                <h3 className="text-sm font-black tracking-tight text-neutral-900">Step 2: Set Payload</h3>
+                <p className="text-[11px] text-neutral-600 leading-relaxed">
+                  Now we define the task. I&apos;ve set a payload to generate a technical summary.
                 </p>
                 <button 
                   onClick={() => {
-                    setChatInput("Create a brief project summary for a solar energy app.");
+                    setChatInput("Create a brief technical project summary for a solar energy app.");
                     nextStep();
                   }}
-                  className="w-full bg-neutral-900 hover:bg-neutral-800 text-white py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all"
+                  className="w-full bg-neutral-900 hover:bg-neutral-800 text-white py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all"
                 >
-                  Set Initial Payload
+                  Prepare Drum
                 </button>
               </div>
             )}
 
             {tutorialStep === 4 && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-black tracking-tight text-neutral-900">3. Real-time Analysis</h3>
-                <p className="text-sm text-neutral-600 leading-relaxed">
-                  The nodes are now ready to run. Observe the canvas after you click. You&apos;ll see the data move and the Auditor validate the result.
+              <div className="space-y-3">
+                <h3 className="text-sm font-black tracking-tight text-neutral-900">Step 3: Launch Swarm</h3>
+                <p className="text-[11px] text-neutral-600 leading-relaxed">
+                  Watch the canvas. The data will move through the nodes, audit itself, and finish in the chat.
                 </p>
                 <button 
                   onClick={() => {
@@ -1393,50 +1366,50 @@ export function DashboardLayout() {
                     setActiveTab('chat');
                     nextStep();
                   }}
-                  className="w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-green-200"
+                  className="w-full bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg shadow-green-100"
                 >
-                  Launch Swarm
+                  Execute Flow
                 </button>
               </div>
             )}
 
             {tutorialStep === 5 && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-black tracking-tight text-neutral-900">4. Verification Complete</h3>
-                <p className="text-sm text-neutral-600 leading-relaxed">
-                  The swarm has finished. The finalized, audited result is now in your chat history. You just built and ran an autonomous system.
+              <div className="space-y-3">
+                <h3 className="text-sm font-black tracking-tight text-neutral-900">Onboarding Complete</h3>
+                <p className="text-[11px] text-neutral-600 leading-relaxed">
+                  You just ran a full autonomous cycle. You can now build your own swarms or explore the Manual.
                 </p>
                 <button 
                   onClick={quitTutorial}
-                  className="w-full bg-neutral-900 hover:bg-neutral-800 text-white py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all"
+                  className="w-full bg-neutral-900 hover:bg-neutral-800 text-white py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all"
                 >
-                  Finish Tour
+                  Finish
                 </button>
               </div>
             )}
           </motion.div>
 
           {showQuitConfirm && (
-            <div className="fixed inset-0 z-[600] flex items-center justify-center bg-neutral-950/80 backdrop-blur-sm">
+            <div className="fixed inset-0 z-[600] flex items-center justify-center bg-neutral-950/20 backdrop-blur-[1px]">
               <motion.div 
-                initial={{ scale: 0.9, opacity: 0 }}
+                initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="bg-white p-8 rounded-[32px] max-w-sm w-full text-center border border-neutral-200 shadow-2xl"
+                className="bg-white p-6 rounded-3xl max-w-xs w-full text-center shadow-2xl border border-neutral-100"
               >
-                <h4 className="text-lg font-black text-neutral-900 mb-2 uppercase tracking-tight">Quit Tutorial?</h4>
-                <p className="text-sm text-neutral-500 mb-6 leading-relaxed">Are you sure you want to exit the guided walkthrough?</p>
-                <div className="flex gap-3">
+                <h4 className="text-sm font-black text-neutral-900 mb-1 uppercase tracking-tight">Stop Tour?</h4>
+                <p className="text-[10px] text-neutral-500 mb-4 font-medium uppercase tracking-widest">Confirmation required</p>
+                <div className="flex gap-2">
                   <button 
                     onClick={() => setShowQuitConfirm(false)}
-                    className="flex-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-900 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+                    className="flex-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-900 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all"
                   >
-                    No, Stay
+                    Stay
                   </button>
                   <button 
                     onClick={quitTutorial}
-                    className="flex-1 bg-red-600 hover:bg-red-500 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-red-200"
+                    className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all"
                   >
-                    Yes, Exit
+                    Exit
                   </button>
                 </div>
               </motion.div>
