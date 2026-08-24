@@ -10,18 +10,19 @@ interface ManualOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   onLoadExample: (nodes: Node[], edges: Edge[]) => void;
+  onStartTutorial: () => void;
 }
 
 const TOPICS = [
-  { id: 'basics', title: 'Core Principles', icon: '🧠', subtitle: 'The foundation of CARGO' },
-  { id: 'system', title: 'System Model', icon: '🏛️', subtitle: 'Ground Truth & Rules' },
-  { id: 'reefer', title: 'Project Reefer', icon: '🌲', subtitle: 'Technical Hierarchy' },
-  { id: 'drums', title: 'Drum Payloads', icon: '🥁', subtitle: 'State & History' },
-  { id: 'linear', title: 'Linear Processing', icon: '➡️', subtitle: 'Simple sequential flows' },
-  { id: 'auditor', title: 'Self-Correcting Loops', icon: '⚖️', subtitle: 'Autonomous QA patterns' },
-  { id: 'router', title: 'Deterministic Routing', icon: '🔀', subtitle: 'Dynamic path selection' },
-  { id: 'hitl', title: 'Human-In-The-Loop', icon: '✋', subtitle: 'The manual safety gate' },
-  { id: 'complex', title: 'Enterprise Pipeline', icon: '🏢', subtitle: 'High-scale orchestration' },
+  { id: 'basics', title: 'Core Principles', subtitle: 'The foundation of CARGO' },
+  { id: 'system', title: 'System Model', subtitle: 'Ground Truth & Rules' },
+  { id: 'reefer', title: 'Project Reefer', subtitle: 'Technical Hierarchy' },
+  { id: 'drums', title: 'Drum Payloads', subtitle: 'State & History' },
+  { id: 'linear', title: 'Linear Processing', subtitle: 'Simple sequential flows' },
+  { id: 'auditor', title: 'Self-Correcting Loops', subtitle: 'Autonomous QA patterns' },
+  { id: 'router', title: 'Deterministic Routing', subtitle: 'Dynamic path selection' },
+  { id: 'hitl', title: 'Human-In-The-Loop', subtitle: 'The manual safety gate' },
+  { id: 'complex', title: 'Enterprise Pipeline', subtitle: 'High-scale orchestration' },
 ];
 
 const EXAMPLES: Record<string, { title: string; desc: string; nodes: Node[]; edges: Edge[] }> = {
@@ -155,7 +156,7 @@ function MiniFlow({ nodes, edges }: { nodes: Node[]; edges: Edge[] }) {
   );
 }
 
-export function ManualOverlay({ isOpen, onClose, onLoadExample }: ManualOverlayProps) {
+export function ManualOverlay({ isOpen, onClose, onLoadExample, onStartTutorial }: ManualOverlayProps) {
   const [activeTopic, setActiveTopic] = useState('basics');
 
   if (!isOpen) return null;
@@ -181,9 +182,16 @@ export function ManualOverlay({ isOpen, onClose, onLoadExample }: ManualOverlayP
               <span className="text-[10px] font-black tracking-[0.2em] uppercase">Architecture Overview</span>
             </div>
             <h1 className="text-4xl font-black tracking-tighter text-neutral-900 mb-4">Core Principles of CARGO</h1>
-            <p className="text-lg text-neutral-600 leading-relaxed">
+            <p className="text-lg text-neutral-600 leading-relaxed mb-6">
               CARGO operates on a deterministic, swarm-based orchestration model. Every pipeline is a directed graph where data moves within encapsulated &ldquo;Drums,&rdquo; subject to global &ldquo;Reefer&rdquo; constraints.
             </p>
+            <button 
+              onClick={onStartTutorial}
+              className="flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-2xl font-black tracking-widest uppercase text-xs shadow-xl shadow-blue-200 transition-all hover:-translate-y-1 active:translate-y-0"
+            >
+              <Play size={16} fill="white" />
+              Start Guided Tour
+            </button>
           </div>
           
           <div className="grid grid-cols-2 gap-6">
@@ -408,20 +416,17 @@ export function ManualOverlay({ isOpen, onClose, onLoadExample }: ManualOverlayP
               
               <div className="flex flex-col gap-3">
                 {TOPICS.map(t => (
-                  <button 
-                    key={t.id}
+                    <div className={`group relative w-full flex flex-col px-5 py-4 rounded-3xl transition-all text-left ${activeTopic === t.id ? 'bg-white shadow-xl shadow-neutral-200/50 scale-[1.02]' : 'hover:bg-neutral-100/80'}`}
                     onClick={() => setActiveTopic(t.id)}
-                    className={`group relative w-full flex flex-col px-5 py-4 rounded-3xl transition-all text-left ${activeTopic === t.id ? 'bg-white shadow-xl shadow-neutral-200/50 scale-[1.02]' : 'hover:bg-neutral-100/80'}`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-3">
-                        <span className={`text-xl transition-transform ${activeTopic === t.id ? 'scale-110' : 'group-hover:scale-110 opacity-70'}`}>{t.icon}</span>
                         <span className={`font-black text-xs tracking-wider transition-colors ${activeTopic === t.id ? 'text-neutral-900' : 'text-neutral-500'}`}>{t.title.toUpperCase()}</span>
                       </div>
                       {activeTopic === t.id && <ChevronRight size={14} className="text-blue-600" />}
                     </div>
-                    <span className="text-[10px] font-bold text-neutral-400 pl-8">{t.subtitle}</span>
-                  </button>
+                    <span className="text-[10px] font-bold text-neutral-400">{t.subtitle}</span>
+                  </div>
                 ))}
               </div>
               
