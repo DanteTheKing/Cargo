@@ -14,6 +14,9 @@ interface ManualOverlayProps {
 
 const TOPICS = [
   { id: 'basics', title: 'Core Principles', icon: '🧠', subtitle: 'The foundation of CARGO' },
+  { id: 'system', title: 'System Model', icon: '🏛️', subtitle: 'Ground Truth & Rules' },
+  { id: 'reefer', title: 'Project Reefer', icon: '🌲', subtitle: 'Technical Hierarchy' },
+  { id: 'drums', title: 'Drum Payloads', icon: '🥁', subtitle: 'State & History' },
   { id: 'linear', title: 'Linear Processing', icon: '➡️', subtitle: 'Simple sequential flows' },
   { id: 'auditor', title: 'Self-Correcting Loops', icon: '⚖️', subtitle: 'Autonomous QA patterns' },
   { id: 'router', title: 'Deterministic Routing', icon: '🔀', subtitle: 'Dynamic path selection' },
@@ -37,7 +40,7 @@ const EXAMPLES: Record<string, { title: string; desc: string; nodes: Node[]; edg
   },
   auditor: {
     title: 'Self-Correcting Auditor',
-    desc: 'The gold standard for agentic systems. The Auditor evaluates output against the Reefer ground truth. If it fails, it triggers an ICE correction back to the model.',
+    desc: 'The gold standard for agentic systems. The Auditor evaluates output against the Reefer ground truth. If it fails, it triggers an ICE (Internal Correction Engine) loop.',
     nodes: [
       { id: 'n1', type: 'custom', position: { x: 50, y: 150 }, data: { nodeType: 'input', label: 'Requirement', status: 'READY' } },
       { id: 'n2', type: 'custom', position: { x: 250, y: 150 }, data: { nodeType: 'model', label: 'Generator', status: 'READY', provider: 'groq', modelVariant: 'groq/compound' } },
@@ -48,14 +51,14 @@ const EXAMPLES: Record<string, { title: string; desc: string; nodes: Node[]; edg
     edges: [
       { id: 'e1', source: 'n1', target: 'n2', type: 'buttonEdge', animated: true },
       { id: 'e2', source: 'n2', target: 'n3', type: 'buttonEdge', animated: true },
-      { id: 'e3', source: 'n3', target: 'n2', type: 'buttonEdge', label: 'ICE CORRECTION', style: { stroke: '#f59e0b', strokeWidth: 3 }, animated: true },
+      { id: 'e3', source: 'n3', target: 'n2', type: 'buttonEdge', label: 'REJECTION', style: { stroke: '#ef4444', strokeWidth: 3 }, animated: true },
       { id: 'e4', source: 'n3', target: 'n4', type: 'buttonEdge', label: 'PASS', style: { stroke: '#22c55e' }, animated: true },
       { id: 'e5', source: 'n4', target: 'n5', type: 'buttonEdge', animated: true }
     ]
   },
   router: {
     title: 'Intent-Based Routing',
-    desc: 'Dynamic branching. The Router classifies the incoming drum and routes it to specialized expert models for domain-specific processing.',
+    desc: 'Dynamic branching. The Router evaluates the drum payload and pick the path that matches the intent of the data.',
     nodes: [
       { id: 'n1', type: 'custom', position: { x: 50, y: 150 }, data: { nodeType: 'input', label: 'Multi-Task Input', status: 'READY' } },
       { id: 'n2', type: 'custom', position: { x: 250, y: 150 }, data: { nodeType: 'router', label: 'Traffic Manager', status: 'READY' } },
@@ -73,12 +76,12 @@ const EXAMPLES: Record<string, { title: string; desc: string; nodes: Node[]; edg
   },
   hitl: {
     title: 'Human-In-The-Loop',
-    desc: 'The safety-first architecture. The system pauses execution at the Wait node, requiring a manual &ldquo;Approve&rdquo; via the Drum inspection UI.',
+    desc: 'Safety-first architecture. The Wait node pauses execution and pushes an approval request to the Chat Terminal for human intervention.',
     nodes: [
-      { id: 'n1', type: 'custom', position: { x: 100, y: 150 }, data: { nodeType: 'input', label: 'Proposal', status: 'READY' } },
-      { id: 'n2', type: 'custom', position: { x: 350, y: 150 }, data: { nodeType: 'model', label: 'Drafter', status: 'READY' } },
-      { id: 'n3', type: 'custom', position: { x: 600, y: 150 }, data: { nodeType: 'wait', label: 'Human Review', status: 'READY' } },
-      { id: 'n4', type: 'custom', position: { x: 850, y: 150 }, data: { nodeType: 'output', label: 'Signed Document', status: 'READY' } }
+      { id: 'n1', type: 'custom', position: { x: 100, y: 150 }, data: { nodeType: 'input', label: 'Draft Proposal', status: 'READY' } },
+      { id: 'n2', type: 'custom', position: { x: 350, y: 150 }, data: { nodeType: 'model', label: 'AI Writer', status: 'READY' } },
+      { id: 'n3', type: 'custom', position: { x: 600, y: 150 }, data: { nodeType: 'wait', label: 'Manager Review', status: 'READY' } },
+      { id: 'n4', type: 'custom', position: { x: 850, y: 150 }, data: { nodeType: 'output', label: 'Approved Result', status: 'READY' } }
     ],
     edges: [
       { id: 'e1', source: 'n1', target: 'n2', type: 'buttonEdge', animated: true },
@@ -87,16 +90,16 @@ const EXAMPLES: Record<string, { title: string; desc: string; nodes: Node[]; edg
     ]
   },
   complex: {
-    title: 'Enterprise Logic Pipeline',
-    desc: 'A robust multi-agent swarm. Combines research, parallel auditing, and human oversight for high-compliance environments.',
+    title: 'Enterprise Pipeline',
+    desc: 'High-compliance workflow combining research, parallel auditing, and human oversight.',
     nodes: [
       { id: 'n1', type: 'custom', position: { x: 0, y: 200 }, data: { nodeType: 'input', label: 'Global Query', status: 'READY' } },
-      { id: 'n2', type: 'custom', position: { x: 200, y: 200 }, data: { nodeType: 'tool', label: 'Researcher', status: 'READY' } },
+      { id: 'n2', type: 'custom', position: { x: 200, y: 200 }, data: { nodeType: 'tool', label: 'Researcher', status: 'READY', toolType: 'SUMMARY' } },
       { id: 'n3', type: 'custom', position: { x: 450, y: 200 }, data: { nodeType: 'model', label: 'Synthesizer', status: 'READY' } },
-      { id: 'n4', type: 'custom', position: { x: 700, y: 100 }, data: { nodeType: 'auditor', label: 'Facts', status: 'READY' } },
-      { id: 'n5', type: 'custom', position: { x: 700, y: 300 }, data: { nodeType: 'auditor', label: 'Policy', status: 'READY' } },
-      { id: 'n6', type: 'custom', position: { x: 950, y: 200 }, data: { nodeType: 'wait', label: 'CEO Review', status: 'READY' } },
-      { id: 'n7', type: 'custom', position: { x: 1200, y: 200 }, data: { nodeType: 'output', label: 'Published', status: 'READY' } }
+      { id: 'n4', type: 'custom', position: { x: 700, y: 100 }, data: { nodeType: 'auditor', label: 'Facts Audit', status: 'READY' } },
+      { id: 'n5', type: 'custom', position: { x: 700, y: 300 }, data: { nodeType: 'auditor', label: 'Policy Audit', status: 'READY' } },
+      { id: 'n6', type: 'custom', position: { x: 950, y: 200 }, data: { nodeType: 'wait', label: 'CEO Approval', status: 'READY' } },
+      { id: 'n7', type: 'custom', position: { x: 1200, y: 200 }, data: { nodeType: 'output', label: 'Final Release', status: 'READY' } }
     ],
     edges: [
       { id: 'e1', source: 'n1', target: 'n2', type: 'buttonEdge', animated: true },
@@ -205,16 +208,113 @@ export function ManualOverlay({ isOpen, onClose, onLoadExample }: ManualOverlayP
                <p className="text-sm text-neutral-600 leading-relaxed">Safety interlocks. Halts the drum until a human provides cryptographic approval or manual correction.</p>
              </div>
           </div>
-          
-          <div className="p-8 bg-neutral-900 text-white rounded-3xl shadow-2xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
-              <Info size={120} />
+        </div>
+      );
+    }
+
+    if (activeTopic === 'system') {
+      return (
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-2 text-amber-600 mb-2">
+              <Network size={14} />
+              <span className="text-[10px] font-black tracking-[0.2em] uppercase">Control Layer</span>
             </div>
-            <h3 className="font-black tracking-[0.3em] text-[11px] mb-4 text-neutral-500 uppercase">THE DRUM SPECIFICATION</h3>
-            <p className="text-base leading-relaxed text-neutral-300 relative z-10 max-w-2xl">
-              Data is never &ldquo;raw.&rdquo; It travels in a &ldquo;Drum&rdquo; package that maintains a compressed hash of its entire history. 
-              As a Drum passes through nodes, its state is immutable—only the current node can generate the next iteration of the payload.
+            <h1 className="text-4xl font-black tracking-tighter text-neutral-900 mb-4">The System Model</h1>
+            <p className="text-lg text-neutral-600 leading-relaxed">
+              The System Model is the &ldquo;Ground Truth&rdquo; of your swarm. It establishes the global identity, architectural rules, and validation logic that every node must follow.
             </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-6">
+            <div className="p-6 bg-amber-50 border border-amber-100 rounded-2xl">
+              <h4 className="font-black text-amber-800 text-[10px] uppercase tracking-widest mb-2">Project DNA</h4>
+              <p className="text-xs text-amber-900/70 leading-relaxed">The high-level description of your application. All agents use this to understand the &ldquo;Why&rdquo; behind the swarm.</p>
+            </div>
+            <div className="p-6 bg-amber-50 border border-amber-100 rounded-2xl">
+              <h4 className="font-black text-amber-800 text-[10px] uppercase tracking-widest mb-2">Model Rules</h4>
+              <p className="text-xs text-amber-900/70 leading-relaxed">Constraints on generation. Forces agents to use specific libraries, coding styles, or structural patterns.</p>
+            </div>
+            <div className="p-6 bg-amber-50 border border-amber-100 rounded-2xl">
+              <h4 className="font-black text-amber-800 text-[10px] uppercase tracking-widest mb-2">Auditor Rules</h4>
+              <p className="text-xs text-amber-900/70 leading-relaxed">Constraints on validation. Defines what constitutes a &ldquo;Pass&rdquo; or &ldquo;Fail&rdquo; for autonomous QA nodes.</p>
+            </div>
+          </div>
+
+          <div className="p-8 bg-amber-600 text-white rounded-3xl shadow-xl">
+            <h3 className="font-black text-xs uppercase tracking-widest mb-4">The Architect Principle</h3>
+            <p className="text-base leading-relaxed font-medium">
+              By setting the System Model, you are effectively acting as the Principal Architect. You don&apos;t need to prompt every node individually; the System Model ensures they all inherit the same technical constraints and business logic.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTopic === 'reefer') {
+      return (
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-2 text-green-600 mb-2">
+              <Network size={14} />
+              <span className="text-[10px] font-black tracking-[0.2em] uppercase">Context Engine</span>
+            </div>
+            <h1 className="text-4xl font-black tracking-tighter text-neutral-900 mb-4">Project Reefer</h1>
+            <p className="text-lg text-neutral-600 leading-relaxed">
+              The Reefer represents your technical environment. It is a live map of your project files, dependencies, and hierarchy that provides agents with precise structural context.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-start gap-4 p-6 bg-green-50 border border-green-100 rounded-2xl">
+              <div className="w-8 h-8 rounded-lg bg-green-200 flex items-center justify-center text-green-700 shrink-0 font-bold">01</div>
+              <div>
+                <h4 className="font-black text-neutral-900 text-xs uppercase tracking-widest mb-1">Structural Awareness</h4>
+                <p className="text-sm text-neutral-600 leading-relaxed">Agents can see your folder structure (e.g., /app/components, /lib/utils), preventing them from suggesting &ldquo;hallucinated&rdquo; file paths.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-4 p-6 bg-green-50 border border-green-100 rounded-2xl">
+              <div className="w-8 h-8 rounded-lg bg-green-200 flex items-center justify-center text-green-700 shrink-0 font-bold">02</div>
+              <div>
+                <h4 className="font-black text-neutral-900 text-xs uppercase tracking-widest mb-1">Dependency Enforcement</h4>
+                <p className="text-sm text-neutral-600 leading-relaxed">By referencing the Reefer, CARGO ensures that any code generated by a model node is compatible with your existing project state.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTopic === 'drums') {
+      return (
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-2 text-rose-600 mb-2">
+              <Network size={14} />
+              <span className="text-[10px] font-black tracking-[0.2em] uppercase">Data Packets</span>
+            </div>
+            <h1 className="text-4xl font-black tracking-tighter text-neutral-900 mb-4">The Drum Payload</h1>
+            <p className="text-lg text-neutral-600 leading-relaxed">
+              Data in CARGO is never loose. It travels in &ldquo;Drums&rdquo;—immutable packets that maintain the state, history, and instructions for every step of the orchestration.
+            </p>
+          </div>
+
+          <div className="p-8 bg-neutral-900 text-white rounded-[40px] border border-neutral-800 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
+               <Network size={200} />
+            </div>
+            <div className="grid grid-cols-2 gap-12 relative z-10">
+              <div>
+                <h4 className="font-black text-rose-500 text-[10px] uppercase tracking-[0.3em] mb-4">The Context Thread</h4>
+                <p className="text-sm text-neutral-400 leading-relaxed mb-6">Drums carry a history of previous transformations. As a payload moves from Node A to Node B, Node B receives the original intent plus Node A&apos;s refinement.</p>
+                <div className="h-px w-12 bg-rose-500" />
+              </div>
+              <div>
+                <h4 className="font-black text-rose-500 text-[10px] uppercase tracking-[0.3em] mb-4">History Compression</h4>
+                <p className="text-sm text-neutral-400 leading-relaxed mb-6">To prevent token overflow, CARGO uses intelligent summary tools to compress large histories into actionable digests within the drum package.</p>
+                <div className="h-px w-12 bg-rose-500" />
+              </div>
+            </div>
           </div>
         </div>
       );

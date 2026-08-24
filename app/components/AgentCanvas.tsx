@@ -44,6 +44,8 @@ export const ButtonEdge = ({
   targetPosition,
   style = {},
   markerEnd,
+  label,
+  data,
 }: EdgeProps) => {
   const { setEdges } = useReactFlow();
   const [edgePath, labelX, labelY] = getBezierPath({
@@ -60,6 +62,8 @@ export const ButtonEdge = ({
     setEdges((edges) => edges.filter((edge) => edge.id !== id));
   };
 
+  const finalLabel = (label || data?.label) as string | React.ReactNode;
+
   return (
     <>
       <BaseEdge path={edgePath} markerEnd={markerEnd} style={{ ...style, strokeWidth: 2 }} />
@@ -71,8 +75,13 @@ export const ButtonEdge = ({
             fontSize: 12,
             pointerEvents: 'all',
           }}
-          className="nodrag nopan"
+          className="nodrag nopan flex flex-col items-center gap-1"
         >
+          {finalLabel && (
+            <div className="bg-white border border-neutral-200 px-2 py-0.5 rounded shadow-sm text-[9px] font-black tracking-widest text-neutral-500 uppercase whitespace-nowrap mb-1">
+              {finalLabel}
+            </div>
+          )}
           <button
             className="w-4 h-4 bg-white border border-red-200 text-red-500 rounded-full flex items-center justify-center font-bold text-[8px] shadow-sm hover:bg-red-500 hover:text-white hover:border-red-500 transition-all cursor-pointer opacity-100"
             onClick={onEdgeClick}

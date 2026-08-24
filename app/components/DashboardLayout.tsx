@@ -53,7 +53,7 @@ export function DashboardLayout() {
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isReeferPanelOpen, setIsReeferPanelOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
-  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; content: string }[]>([]);
+  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; content: string; metadata?: { type: 'approval'; nodeId: string; payload: string } }[]>([]);
   const [systemModel, setSystemModel] = useState<{enabled: boolean, description: string, modelRules: string, auditorRules: string}>({ enabled: false, description: '', modelRules: '', auditorRules: '' });
   const [isSystemModelPanelOpen, setIsSystemModelPanelOpen] = useState(false);
   const [isDocsOpen, setIsDocsOpen] = useState(false);
@@ -367,13 +367,16 @@ export function DashboardLayout() {
       } 
       else if (nodeData.nodeType === 'model') {
         const isCasual = currentReefer?.grade === 'CASUAL';
+        
+        // Accumulate context: Input + History + Previous Drum
+        const historyContext = chatHistory.map(h => `${h.role.toUpperCase()}: ${h.content}`).join('\n');
         const prompt = isCasual 
-          ? inputDrum.compressedPayload 
-          : `Current Payload: ${inputDrum.compressedPayload}\nNext Instruction: ${inputDrum.nextInstruction}`;
+          ? `HISTORY:\n${historyContext}\n\nCURRENT INPUT: ${inputDrum.compressedPayload}` 
+          : `CONTEXT HISTORY:\n${historyContext}\n\nCURRENT PAYLOAD: ${inputDrum.compressedPayload}\nNEXT INSTRUCTION: ${inputDrum.nextInstruction}`;
         
         let systemPrompt = isCasual
-          ? `${nodeData.systemPrompt}\n\nMODE: CASUAL. Be warm and friendly in output. Use Markdown. Stay brief and direct internally to save tokens.`
-          : `${nodeData.systemPrompt}\n\nMODE: PRODUCTION. Output ONLY raw actionable data. Strip all chatter. Strict adherence to Reefer constraints.`;
+          ? `${nodeData.systemPrompt}\n\nMODE: CASUAL. Be warm and friendly. Use Markdown. Stay brief.`
+          : `${nodeData.systemPrompt}\n\nMODE: PRODUCTION. Output ONLY raw actionable data. Strip chatter. Strict Reefer adherence.`;
 
         if (systemModel.enabled) {
           systemPrompt += `\n\n[SYSTEM MODEL RULES]\nProject Description: ${systemModel.description}\nModel Rules: ${systemModel.modelRules}`;
@@ -455,14 +458,25 @@ export function DashboardLayout() {
            
            const feedbackEdges = edges.filter(e => e.source === nodeId && nodes.find(n => n.id === e.target)?.data.nodeType === 'model');
            if (feedbackEdges.length > 0) {
-              const feedbackPayload = `PREVIOUS PAYLOAD:\n${inputDrum.compressedPayload}\n\nAUDIT FLAG REASON:\n${auditJson.reason}\n\nFIX INSTRUCTIONS:\nPlease revise the payload to address the audit flag.`;
+              const feedbackPayload = `
+              [CRITICAL AUDIT REJECTION]
+              Your previous output was rejected by the validation engine.
+              
+              REJECTION REASON: 
+              "${auditJson.reason}"
+              
+              ORIGINAL PAYLOAD:
+              ${inputDrum.compressedPayload}
+              
+              INSTRUCTIONS:
+              Please fix the errors identified above and output the corrected version. Do not apologize, just provide the fixed content.`;
               
               const successorPromises = feedbackEdges.map(async (edge) => {
                 const nextDrum: DrumPayload = {
                   drumId: `drum_${Math.random().toString(36).substr(2, 5)}`,
                   sequenceStep: inputDrum.sequenceStep + 1,
                   compressedPayload: feedbackPayload,
-                  nextInstruction: "Fix the payload based on auditor feedback.",
+                  nextInstruction: `FIX ERROR: ${auditJson.reason}`,
                   status: 'PASS'
                 };
                 captureSnapshot(edge.id, nextDrum);
@@ -489,34 +503,115 @@ export function DashboardLayout() {
         await new Promise(r => setTimeout(r, 1000));
       }
       else if (nodeData.nodeType === 'tool') {
-        addLog(`[TOOL] Executing mock external tool ${label}...`);
-        await new Promise(r => setTimeout(r, 1000));
-        outputPayload = inputDrum.compressedPayload + `\n\n[TOOL EXECUTED] Fetched mock external data for ${label}.`;
+        const toolType = (nodeData.toolType || 'TRANSFORM').toUpperCase();
+        addLog(`[TOOL] Executing ${toolType} utility: ${label}...`);
+        
+        try {
+          if (toolType === 'JSON_FORMAT') {
+            const raw = inputDrum.compressedPayload;
+            const start = raw.indexOf('{');
+            const end = raw.lastIndexOf('}');
+            if (start !== -1 && end !== -1) {
+              const json = JSON.parse(raw.substring(start, end + 1));
+              outputPayload = JSON.stringify(json, null, 2);
+              addLog(`[TOOL] Successfully formatted JSON.`);
+            } else {
+              throw new Error("No JSON object found in payload.");
+            }
+          } 
+          else if (toolType === 'SUMMARY') {
+            addLog(`[TOOL] Generating payload digest...`);
+            const summaryPrompt = `Summarize the following payload into a 1-2 sentence digest for the next node in the chain:\n\n${inputDrum.compressedPayload}`;
+            outputPayload = await callGroqApi(summaryPrompt, 'groq/compound-mini', "You are a text compression utility.");
+          }
+          else if (toolType === 'EXTRACT_CODE') {
+            const raw = inputDrum.compressedPayload;
+            const matches = raw.match(/```[\s\S]*?```/g);
+            if (matches) {
+              outputPayload = matches.map(m => m.replace(/```[a-zA-Z]*\n?|```/g, '')).join('\n\n---\n\n');
+              addLog(`[TOOL] Extracted ${matches.length} code blocks.`);
+            } else {
+              outputPayload = raw;
+              addLog(`[TOOL] No code blocks found to extract.`);
+            }
+          }
+          else {
+            // Default Transform: Simple cleaning
+            outputPayload = inputDrum.compressedPayload.trim();
+            await new Promise(r => setTimeout(r, 500));
+          }
+        } catch (err: any) {
+          addLog(`[TOOL ERROR] ${err.message}`);
+          outputPayload = inputDrum.compressedPayload; // Passthrough on error
+        }
       }
       else if (nodeData.nodeType === 'router') {
         const outgoingEdgesForRouter = edges.filter(e => e.source === nodeId);
         if (outgoingEdgesForRouter.length > 0) {
-           const routes = outgoingEdgesForRouter.map(e => `Edge ID: ${e.id}, Target Node: ${nodes.find(n=>n.id === e.target)?.data.label || e.target}`).join('\n');
-           const routerPrompt = `PAYLOAD:\n${inputDrum.compressedPayload}\n\nAVAILABLE ROUTES:\n${routes}\n\nBased on the payload, which route is the most appropriate? Reply with strictly the Edge ID as a JSON: {"edgeId": "edge_id_here"}`;
+           const routes = outgoingEdgesForRouter.map(e => {
+             const targetNode = nodes.find(n => n.id === e.target);
+             const edgeLabel = e.label || (e.data as any)?.label || 'UNLABELED_ROUTE';
+             return `- Route: "${edgeLabel}" (ID: ${e.id}) -> Leading to: ${targetNode?.data.label || 'Unnamed Node'}`;
+           }).join('\n');
+
+           const routerPrompt = `
+           [DETERMINISTIC ROUTING INSTRUCTION]
+           You are a high-speed traffic manager. Your goal is to analyze the payload and select the most logical route from the available options.
+           
+           CURRENT DRUM PAYLOAD:
+           "${inputDrum.compressedPayload}"
+           
+           AVAILABLE ROUTES:
+           ${routes}
+           
+           DECISION LOGIC:
+           1. Analyze the intent/content of the payload.
+           2. Match the intent to the most relevant "Route" label.
+           3. If no route matches perfectly, pick the "TECHNICAL" or "GENERAL" default if available.
+           
+           Output ONLY a JSON object: {"edgeId": "the_chosen_edge_id", "reasoning": "Brief explanation"}`;
+
            const startTime = Date.now();
            const result = await callGroqApi(routerPrompt, 'groq/compound-mini', "You are a deterministic routing logic gate. Return ONLY valid JSON.");
            const latency = Date.now() - startTime;
            addLog(`[TELEMETRY] Router Node ${label} completed in ${latency}ms`);
+
            try {
-             const routerJson = JSON.parse(result.substring(result.indexOf('{'), result.lastIndexOf('}') + 1));
+             const cleanJson = result.substring(result.indexOf('{'), result.lastIndexOf('}') + 1);
+             const routerJson = JSON.parse(cleanJson);
+             
              if (routerJson.edgeId && outgoingEdgesForRouter.find(e => e.id === routerJson.edgeId)) {
                 (nodeData as any).selectedRoute = routerJson.edgeId;
-                addLog(`[ROUTER] Routed payload via edge ${routerJson.edgeId}`);
+                const selectedEdge = outgoingEdgesForRouter.find(e => e.id === routerJson.edgeId);
+                const selectedLabel = selectedEdge?.label || (selectedEdge?.data as any)?.label || 'Unlabeled';
+                addLog(`[ROUTER] Intent matched: "${selectedLabel.toString().toUpperCase()}". Routing to ID: ${routerJson.edgeId}`);
+                addLog(`[ROUTER LOGIC] ${routerJson.reasoning}`);
+             } else {
+                throw new Error("Invalid Edge ID selected by router.");
              }
            } catch (e) {
-             console.error("Router Parse Error:", e);
+             addLog(`[ERROR] Router ${label} failed to determine path. Defaulting to first available route.`);
+             (nodeData as any).selectedRoute = outgoingEdgesForRouter[0].id;
            }
+        } else {
+           addLog(`[ERROR] Router ${label} has no outgoing connections.`);
         }
       }
       else if (nodeData.nodeType === 'wait') {
         setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'PENDING_APPROVAL' } } : n));
         addLog(`[WAIT] Simulation halted at ${label}. Waiting for human-in-the-loop approval...`);
         
+        // Push intervention request to chat
+        setChatHistory(prev => [...prev, { 
+          role: 'ai', 
+          content: `🚦 **PENDING APPROVAL:** The simulation is waiting at **${label}**. Please review the current payload and decide whether to continue.`,
+          metadata: {
+            type: 'approval',
+            nodeId: nodeId,
+            payload: inputDrum.compressedPayload
+          }
+        }]);
+
         outputPayload = await new Promise<string>((resolve) => {
           pendingApprovalsRef.current[nodeId] = { resolve, currentPayload: inputDrum.compressedPayload };
           setWaitingNodesTrigger(prev => prev + 1);
@@ -997,26 +1092,22 @@ export function DashboardLayout() {
                          </div>
 
                        </>
-                     )}
-
-                     <div className="pt-4 border-t border-neutral-100">
-                       {inspectedNode.data.status === 'PENDING_APPROVAL' && (
-                         <div className="mb-4 flex flex-col gap-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
-                           <label className="text-[9px] font-black text-cyan-800 uppercase tracking-widest">Action Required</label>
-                           <p className="text-[10px] text-cyan-900 leading-relaxed mb-2">The simulation is paused here. Please review the drum state and approve to continue.</p>
-                           <button 
-                             onClick={() => {
-                               const pending = pendingApprovalsRef.current[inspectedNode.id];
-                               if (pending) pending.resolve(pending.currentPayload);
-                             }}
-                             className="w-full bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-black uppercase tracking-widest py-2 rounded shadow-sm transition-all"
-                           >
-                             Approve & Resume
-                           </button>
-                         </div>
-                       )}
-                       <button 
-                         onClick={() => {
+                      )}
+                      <div className="pt-4 border-t border-neutral-100">
+                        {inspectedNode.data.status === 'PENDING_APPROVAL' && (
+                          <div className="mb-4 flex flex-col gap-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                            <label className="text-[9px] font-black text-cyan-800 uppercase tracking-widest">Action Required</label>
+                            <p className="text-[10px] text-cyan-900 leading-relaxed italic">Simulation paused. Approval button is now located in the <strong>Chat Interface</strong>.</p>
+                            <button 
+                              onClick={() => setActiveTab('chat')}
+                              className="w-full bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-black uppercase tracking-widest py-2 rounded shadow-sm transition-all"
+                            >
+                              Go to Chat for Approval
+                            </button>
+                          </div>
+                        )}
+                        <button 
+                          onClick={() => {
                            setNodes(nds => nds.filter(n => n.id !== inspectedNode.id));
                            setSelectedNodeId(null);
                          }}
@@ -1086,6 +1177,31 @@ export function DashboardLayout() {
                                msg.content
                              )}
                           </div>
+                          
+                          {msg.metadata?.type === 'approval' && (
+                            <div className="mt-4 pt-4 border-t border-neutral-100 flex flex-col gap-3">
+                              <div className="p-3 bg-neutral-50 rounded border border-neutral-100 font-mono text-[10px] text-neutral-500 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                                {msg.metadata.payload}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    const pending = pendingApprovalsRef.current[msg.metadata!.nodeId];
+                                    if (pending) pending.resolve(pending.currentPayload);
+                                  }}
+                                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-black uppercase tracking-widest py-2.5 rounded-lg shadow-sm transition-all"
+                                >
+                                  Approve & Continue
+                                </button>
+                                <button
+                                  onClick={() => setIsRunning(false)}
+                                  className="px-4 py-2.5 border border-neutral-200 text-neutral-400 hover:text-red-500 hover:border-red-200 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all"
+                                >
+                                  Stop
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                         {msg.role === 'user' && (
                           <div className="w-8 h-8 rounded bg-blue-100 flex items-center justify-center text-blue-600 shrink-0 font-black text-[10px]">YOU</div>
