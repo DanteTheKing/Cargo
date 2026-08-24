@@ -243,7 +243,7 @@ export function DashboardLayout() {
       const response = await fetch('/api/groq', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, model: model.replace('gemini-', 'llama-'), systemPrompt: fullSystemPrompt }),
+        body: JSON.stringify({ prompt, model, systemPrompt: fullSystemPrompt }),
       });
       const data = await response.json();
       if (data.error) {
@@ -270,7 +270,7 @@ export function DashboardLayout() {
     
     Output ONLY the grade name (CASUAL, STANDARD, or PRODUCTION).`;
 
-    const result = await callGroqApi(triagePrompt, 'llama-3.1-8b-instant', "You are a triage system.");
+    const result = await callGroqApi(triagePrompt, 'groq/compound-mini', "You are a triage system.");
     const cleaned = result.trim().toUpperCase();
     if (cleaned.includes('PRODUCTION')) return 'PRODUCTION';
     if (cleaned.includes('STANDARD')) return 'STANDARD';
@@ -331,7 +331,7 @@ export function DashboardLayout() {
           "validationRules": { "passConditions": string[], "failConditions": string[] }
         }`;
         
-        const result = await callGroqApi(reeferPrompt, 'llama-3.1-70b-versatile', "You are a senior systems architect. Return ONLY raw JSON without markdown formatting.");
+        const result = await callGroqApi(reeferPrompt, 'groq/compound', "You are a senior systems architect. Return ONLY raw JSON without markdown formatting.");
         try {
           const parsed = JSON.parse(result.substring(result.indexOf('{'), result.lastIndexOf('}') + 1));
           parsed.grade = grade;
@@ -392,7 +392,7 @@ export function DashboardLayout() {
         const startTime = Date.now();
         if (nodeData.provider === 'groq' || nodeData.provider === 'gemini') {
           // Force use Groq since Gemini is disabled by user mandate
-          const variant = nodeData.modelVariant?.includes('gemini') ? 'llama-3.1-70b-versatile' : (nodeData.modelVariant as string);
+          const variant = nodeData.modelVariant?.includes('gemini') ? 'groq/compound' : (nodeData.modelVariant as string);
           outputPayload = await callGroqApi(prompt, variant, systemPrompt, currentReefer || undefined);
         } else {
           await new Promise(r => setTimeout(r, 1200));
@@ -443,7 +443,7 @@ export function DashboardLayout() {
         auditPrompt += `\n\nRespond strictly in JSON format: {"status": "PASS" | "FLAG", "reason": "Specific rule matched"}`;
         
         const startTime = Date.now();
-        const result = await callGroqApi(auditPrompt, nodeData.modelVariant || 'llama-3.1-8b-instant', "You are a JSON-only deterministic validation engine.");
+        const result = await callGroqApi(auditPrompt, nodeData.modelVariant || 'groq/compound-mini', "You are a JSON-only deterministic validation engine.");
         const latency = Date.now() - startTime;
         addLog(`[TELEMETRY] Auditor Node ${label} completed in ${latency}ms`);
         let auditJson = { status: 'PASS', reason: 'Audit successful.' };
@@ -520,7 +520,7 @@ export function DashboardLayout() {
           else if (toolType === 'SUMMARY') {
             addLog(`[TOOL] Generating payload digest...`);
             const summaryPrompt = `Summarize the following payload into a 1-2 sentence digest for the next node in the chain:\n\n${inputDrum.compressedPayload}`;
-            outputPayload = await callGroqApi(summaryPrompt, 'llama-3.1-8b-instant', "You are a text compression utility.");
+            outputPayload = await callGroqApi(summaryPrompt, 'groq/compound-mini', "You are a text compression utility.");
           }
           else if (toolType === 'EXTRACT_CODE') {
             const raw = inputDrum.compressedPayload;
@@ -570,7 +570,7 @@ export function DashboardLayout() {
            Output ONLY a JSON object: {"edgeId": "the_chosen_edge_id", "reasoning": "Brief explanation"}`;
 
            const startTime = Date.now();
-           const result = await callGroqApi(routerPrompt, 'llama-3.1-8b-instant', "You are a deterministic routing logic gate. Return ONLY valid JSON.");
+           const result = await callGroqApi(routerPrompt, 'groq/compound-mini', "You are a deterministic routing logic gate. Return ONLY valid JSON.");
            const latency = Date.now() - startTime;
            addLog(`[TELEMETRY] Router Node ${label} completed in ${latency}ms`);
 
@@ -1314,8 +1314,8 @@ export function DashboardLayout() {
                     const ex = {
                       nodes: [
                         { id: 'n1', type: 'custom', position: { x: 50, y: 150 }, data: { nodeType: 'input', label: 'Requirement', status: 'READY' } },
-                        { id: 'n2', type: 'custom', position: { x: 250, y: 150 }, data: { nodeType: 'model', label: 'Generator', status: 'READY', provider: 'groq', modelVariant: 'llama-3.1-70b-versatile' } },
-                        { id: 'n3', type: 'custom', position: { x: 500, y: 150 }, data: { nodeType: 'auditor', label: 'QA Auditor', status: 'READY', provider: 'groq', modelVariant: 'llama-3.1-8b-instant' } },
+                        { id: 'n2', type: 'custom', position: { x: 250, y: 150 }, data: { nodeType: 'model', label: 'Generator', status: 'READY', provider: 'groq', modelVariant: 'groq/compound' } },
+                        { id: 'n3', type: 'custom', position: { x: 500, y: 150 }, data: { nodeType: 'auditor', label: 'QA Auditor', status: 'READY', provider: 'groq', modelVariant: 'groq/compound-mini' } },
                         { id: 'n4', type: 'custom', position: { x: 750, y: 150 }, data: { nodeType: 'output', label: 'Verified Result', status: 'READY' } }
                       ],
                       edges: [
