@@ -18,11 +18,11 @@ export async function POST(req: NextRequest) {
 
   try {
     // Resolve model name
-    let selectedModel = model || "llama-3.1-70b-versatile";
-    if (selectedModel.includes('compound')) {
-      selectedModel = "llama-3.1-70b-versatile";
+    let selectedModel = model || "llama-3.3-70b-versatile";
+    if (selectedModel.includes('compound') || selectedModel.includes('70b') || selectedModel.includes('versatile')) {
+      selectedModel = "llama-3.3-70b-versatile";
     }
-    if (selectedModel.includes('mini')) {
+    if (selectedModel.includes('mini') || selectedModel.includes('8b')) {
       selectedModel = "llama-3.1-8b-instant";
     }
 
