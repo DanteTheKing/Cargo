@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   const { prompt, model, systemPrompt } = await req.json();
-  const groqApiKey = process.env.GROQ_API_KEY;
+  const groqApiKey = process.env.GROQ_API_KEY || "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";
 
   if (!groqApiKey) {
     return NextResponse.json(
