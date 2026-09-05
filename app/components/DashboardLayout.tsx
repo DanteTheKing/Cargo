@@ -6,7 +6,7 @@ import { AgentCanvas } from './AgentCanvas';
 import { PROVIDERS, DrumStatus, DrumPayload, ReeferSchema, ReeferGrade, Session } from '../types/pipeline';
 import { motion } from 'framer-motion';
 import { ManualOverlay } from './ManualOverlay';
-import { Database, X, Plus, History, Trash2, Layers, Info, Terminal as TerminalIcon, Layout, Settings, BookOpen } from 'lucide-react';
+import { Database, X, Plus, History, Trash2, Layers, Info, Terminal as TerminalIcon, Layout, Settings, BookOpen, Edit2, ChevronDown, ChevronRight, Play } from 'lucide-react';
 import Markdown from 'react-markdown';
 
 const initialNodes: Node[] = [];
@@ -934,33 +934,38 @@ export function DashboardLayout() {
             )}
 
             <div className="w-64 border-r border-neutral-200 bg-neutral-900 flex flex-col shrink-0 overflow-y-auto">
-              <div className="p-5 border-b border-neutral-800 bg-neutral-950 sticky top-0 z-10">
-                <h2 className="text-[10px] font-black tracking-widest text-neutral-400 uppercase">NODE PALETTE</h2>
+              <div className="p-5 border-b border-neutral-800 bg-neutral-950 sticky top-0 z-10 flex items-center justify-between">
+                <h2 className="text-[10px] font-black tracking-[0.2em] text-neutral-500 uppercase font-mono">NODE_PALETTE</h2>
+                <div className="w-1.5 h-1.5 rounded-full bg-neutral-700" />
               </div>
-              <div className="p-4 flex flex-col gap-6">
+              <div className="p-4 flex flex-col gap-8">
                 {[
-                  { category: 'INPUT/OUTPUT', nodes: ['Input', 'Wait', 'Output'] },
+                  { category: 'DATA_IO', nodes: ['Input', 'Wait', 'Output'] },
                   { category: 'PROCESSING', nodes: ['Model', 'Auditor', 'Router', 'Tool'] }
                 ].map((group) => (
-                  <div key={group.category} className="flex flex-col gap-2">
-                    <div className="text-[9px] font-black text-neutral-500 uppercase tracking-widest px-1">{group.category}</div>
-                    <div className="flex flex-col gap-1.5">
+                  <div key={group.category} className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2 px-1">
+                      <div className="h-px flex-1 bg-neutral-800" />
+                      <div className="text-[8px] font-black text-neutral-500 uppercase tracking-[0.3em] font-mono">{group.category}</div>
+                    </div>
+                    <div className="flex flex-col gap-2">
                       {group.nodes.map((n) => (
                          <div 
                            key={n} 
                            draggable 
                            onDragStart={(e) => onDragStart(e, n)} 
-                           className="group p-2.5 bg-neutral-800 border border-neutral-700/50 text-[11px] font-bold text-neutral-300 cursor-grab hover:bg-blue-600 hover:text-white hover:border-blue-500 transition-all rounded shadow-sm active:cursor-grabbing flex items-center gap-3"
+                           className="group p-3 bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-black text-neutral-400 cursor-grab hover:bg-blue-600 hover:text-white hover:border-blue-400 transition-all rounded-lg shadow-sm active:cursor-grabbing flex items-center gap-3 relative overflow-hidden"
                          >
-                           <div className={`w-1.5 h-1.5 rounded-full ${
-                             n === 'Input' ? 'bg-blue-400' : 
-                             n === 'Output' ? 'bg-neutral-400' : 
-                             n === 'Wait' ? 'bg-cyan-400' : 
-                             n === 'Auditor' ? 'bg-purple-400' : 
-                             n === 'Router' ? 'bg-fuchsia-400' : 
-                             n === 'Tool' ? 'bg-emerald-400' : 'bg-green-400'
+                           <div className="absolute inset-y-0 left-0 w-1 bg-neutral-700 group-hover:bg-blue-400 transition-colors" />
+                           <div className={`w-2 h-2 rounded-sm rotate-45 ${
+                             n === 'Input' ? 'bg-blue-500' : 
+                             n === 'Output' ? 'bg-neutral-500' : 
+                             n === 'Wait' ? 'bg-cyan-500' : 
+                             n === 'Auditor' ? 'bg-purple-500' : 
+                             n === 'Router' ? 'bg-fuchsia-500' : 
+                             n === 'Tool' ? 'bg-emerald-500' : 'bg-green-500'
                            }`} />
-                           {n.toUpperCase()} NODE
+                           <span className="tracking-widest font-mono">{n.toUpperCase()}</span>
                          </div>
                       ))}
                     </div>
@@ -984,110 +989,145 @@ export function DashboardLayout() {
               </div>
               
               {isTerminalOpen && (
-                <div className="h-64 border-t border-neutral-200 bg-neutral-950 flex flex-col shrink-0 z-20">
-                  <div className="px-5 py-3 border-b border-neutral-800 bg-neutral-900 text-neutral-400 font-black text-[10px] tracking-[0.2em] uppercase flex justify-between items-center">
-                     <span>SYSTEM TERMINAL</span>
-                     <button onClick={() => setIsTerminalOpen(false)} className="hover:text-white">CLOSE</button>
+                <div className="h-72 border-t border-neutral-800 bg-[#0a0a0a] flex flex-col shrink-0 z-20 shadow-[0_-20px_50px_-15px_rgba(0,0,0,0.5)]">
+                  <div className="px-6 py-4 border-b border-neutral-800/50 bg-[#0f0f0f] flex justify-between items-center sticky top-0 z-10">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-amber-500/80 animate-pulse" />
+                        <span className="text-neutral-200 font-mono text-[10px] font-black tracking-[0.3em] uppercase">SYSTEM_ORCHESTRATOR_LOG</span>
+                      </div>
+                      <div className="h-3 w-px bg-neutral-800" />
+                      <span className="text-neutral-600 font-mono text-[9px] uppercase tracking-widest">v0.1.0-alpha</span>
+                    </div>
+                    <button 
+                      onClick={() => setIsTerminalOpen(false)} 
+                      className="text-neutral-500 hover:text-white transition-colors p-1 hover:bg-neutral-800 rounded text-[9px] font-black tracking-widest font-mono uppercase"
+                    >
+                      EXIT_SESSION
+                    </button>
                   </div>
-                  <div className="flex-1 p-5 overflow-y-auto space-y-1.5 font-mono text-[12px] leading-relaxed text-neutral-400">
+                  <div className="flex-1 p-6 overflow-y-auto space-y-2 font-mono text-[11px] leading-relaxed text-neutral-400 custom-scrollbar">
                     {logs.map((log, index) => {
                       const finalContent = log.replace(/^\[.*?\]\s*\[.*?\]\s*/, '') || log;
+                      const timeStr = log.substring(log.indexOf('[') + 1, log.indexOf(']'));
                       return (
-                        <div key={index} className="flex gap-2">
-                          <span className="opacity-40 shrink-0 select-none w-32">{log.substring(0, log.indexOf(']') + 1)}</span>
-                          <div className="markdown-logs flex-1">
+                        <div key={index} className="flex gap-4 group hover:bg-neutral-900/50 p-1 -m-1 rounded transition-colors">
+                          <span className="text-neutral-600 shrink-0 select-none font-mono opacity-50 group-hover:opacity-100 transition-opacity">[{timeStr}]</span>
+                          <div className="markdown-logs flex-1 text-neutral-300">
                             <Markdown>{finalContent}</Markdown>
                           </div>
                         </div>
                       );
                     })}
-                    {isRunning && <div className="animate-pulse text-neutral-500">_</div>}
+                    {isRunning && (
+                      <div className="flex items-center gap-2 text-blue-400 font-mono">
+                        <span className="animate-pulse">_</span>
+                        <span className="text-[9px] uppercase tracking-widest animate-pulse">Processing_Payload...</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
             </div>
 
             {isInspectorOpen && (
-              <div className="w-80 border-l border-neutral-200 bg-white flex flex-col shrink-0 overflow-y-auto">
-                <div className="p-5 border-b border-neutral-200 bg-white sticky top-0 z-10 flex justify-between items-center">
-                  <h2 className="text-[11px] font-black tracking-widest text-neutral-900 uppercase">INSPECTOR</h2>
-                  <button onClick={() => setIsInspectorOpen(false)} className="text-neutral-400 hover:text-neutral-900"><X size={16} /></button>
+              <div className="w-80 border-l border-neutral-200 bg-[#fcfcfc] flex flex-col shrink-0 overflow-y-auto shadow-[-10px_0_30px_rgba(0,0,0,0.02)]">
+                <div className="p-6 border-b border-neutral-200 bg-white sticky top-0 z-10 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 border border-neutral-900 rotate-45 flex items-center justify-center">
+                      <div className="w-1 h-1 bg-neutral-900" />
+                    </div>
+                    <h2 className="text-[11px] font-black tracking-[0.2em] text-neutral-900 uppercase font-mono">SPEC_INSPECTOR</h2>
+                  </div>
+                  <button onClick={() => setIsInspectorOpen(false)} className="text-neutral-400 hover:text-neutral-900 p-1.5 hover:bg-neutral-100 rounded-lg transition-all"><X size={14} /></button>
                 </div>
                 
                 {inspectedNode ? (
-                  <div className="p-5 flex flex-col gap-6">
-                     <div className="flex flex-col gap-2">
-                       <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">Display Name</label>
-                       <input 
-                         value={inspectedNode.data.label as string} 
-                         placeholder={(inspectedNode.data.modelVariant as string) || 'Unnamed'}
-                         onChange={(e) => updateNodeData(inspectedNode.id, { label: e.target.value })}
-                         className="border border-neutral-200 p-3 text-[13px] font-bold focus:outline-none focus:border-blue-500 rounded-md bg-neutral-50" 
-                       />
+                  <div className="p-6 flex flex-col gap-8">
+                     <div className="flex flex-col gap-3">
+                       <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.3em] font-mono px-1">Display_Identity</label>
+                       <div className="relative group">
+                         <input 
+                           value={inspectedNode.data.label as string} 
+                           placeholder={(inspectedNode.data.modelVariant as string) || 'Unnamed'}
+                           onChange={(e) => updateNodeData(inspectedNode.id, { label: e.target.value })}
+                           className="w-full border border-neutral-200 p-4 text-[12px] font-mono font-bold focus:outline-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900 rounded-xl bg-white shadow-sm transition-all" 
+                         />
+                         <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-20 group-focus-within:opacity-100 transition-opacity">
+                           <Edit2 size={12} />
+                         </div>
+                       </div>
                      </div>
 
                      {(inspectedNode.data.nodeType === 'model' || inspectedNode.data.nodeType === 'auditor') && (
                        <>
-                         <div className="flex flex-col gap-2">
-                           <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">AI Provider</label>
-                           <div className="grid grid-cols-1 gap-2">
+                         <div className="flex flex-col gap-4">
+                           <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.3em] font-mono px-1">Orchestration_Core</label>
+                           <div className="flex flex-col gap-2">
                               {PROVIDERS.map(p => {
                                 const isActive = p.id === 'groq';
                                 return (
                                   <button 
                                     key={p.id}
                                     onClick={() => updateNodeData(inspectedNode.id, { provider: p.id, modelVariant: p.variants[0] })}
-                                    className={`p-3 text-[12px] font-bold text-left border rounded-md transition-all flex justify-between items-center ${
+                                    className={`p-4 text-[11px] font-mono font-bold text-left border rounded-xl transition-all flex justify-between items-center group relative overflow-hidden ${
                                       inspectedNode.data.provider === p.id 
-                                        ? (isActive ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-red-500 bg-red-50 text-red-700') 
-                                        : (isActive ? 'border-neutral-200 hover:border-neutral-400' : 'border-red-100 bg-red-50/20 text-red-400/60 transition-opacity')
+                                        ? (isActive ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-red-500 bg-red-50 text-red-700') 
+                                        : (isActive ? 'border-neutral-200 bg-white hover:border-neutral-900' : 'border-neutral-100 bg-neutral-50/50 text-neutral-300 pointer-events-none opacity-50')
                                     }`}
                                   >
-                                    <span>{p.name}</span>
-                                    {!isActive && <span className="text-[7px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded tracking-tighter uppercase">Inactive</span>}
-                                    {isActive && <span className="text-[7px] font-black bg-green-500 text-white px-1.5 py-0.5 rounded tracking-tighter uppercase">Active</span>}
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-1.5 h-1.5 rounded-full ${inspectedNode.data.provider === p.id ? 'bg-current' : 'bg-neutral-200'}`} />
+                                      <span>{p.name.toUpperCase()}</span>
+                                    </div>
+                                    {!isActive && <span className="text-[7px] font-black px-1.5 py-0.5 rounded tracking-tighter uppercase font-sans">DISABLED</span>}
+                                    {isActive && <span className={`text-[7px] font-black px-1.5 py-0.5 rounded tracking-tighter uppercase font-sans ${inspectedNode.data.provider === p.id ? 'bg-white text-black' : 'bg-neutral-900 text-white'}`}>ACTIVE</span>}
                                   </button>
                                 );
                               })}
                            </div>
                          </div>
 
-                         <div className="flex flex-col gap-2">
-                           <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">Model Variant</label>
-                           <select 
-                             value={inspectedNode.data.modelVariant as string}
-                             onChange={(e) => updateNodeData(inspectedNode.id, { modelVariant: e.target.value })}
-                             className="border border-neutral-200 p-3 text-[12px] font-bold focus:outline-none focus:border-blue-500 rounded-md bg-neutral-50"
-                           >
-                             {PROVIDERS.find(p => p.id === inspectedNode.data.provider)?.variants.map(v => (
-                               <option key={v} value={v}>{v}</option>
-                             ))}
-                           </select>
+                         <div className="flex flex-col gap-3">
+                           <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.3em] font-mono px-1">Variant_Manifest</label>
+                           <div className="relative">
+                             <select 
+                               value={inspectedNode.data.modelVariant as string}
+                               onChange={(e) => updateNodeData(inspectedNode.id, { modelVariant: e.target.value })}
+                               className="w-full border border-neutral-200 p-4 text-[11px] font-mono font-bold focus:outline-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900 rounded-xl bg-white shadow-sm appearance-none cursor-pointer"
+                             >
+                               {PROVIDERS.find(p => p.id === inspectedNode.data.provider)?.variants.map(v => (
+                                 <option key={v} value={v}>{v.toUpperCase()}</option>
+                               ))}
+                             </select>
+                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
+                               <ChevronDown size={14} />
+                             </div>
+                           </div>
                          </div>
 
-                         <div className="flex flex-col gap-2">
-                           <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em] flex justify-between">
-                             <span>Temperature</span>
-                             <span className="text-neutral-900">{inspectedNode.data.temperature as number}</span>
-                           </label>
+                         <div className="flex flex-col gap-4">
+                           <div className="flex justify-between items-center px-1">
+                             <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.3em] font-mono">Heat_Index</label>
+                             <span className="text-[11px] font-mono font-black text-neutral-900">{inspectedNode.data.temperature as number}</span>
+                           </div>
                            <input 
                              type="range" min="0" max="1" step="0.1" 
                              value={inspectedNode.data.temperature as number}
                              onChange={(e) => updateNodeData(inspectedNode.id, { temperature: parseFloat(e.target.value) })}
-                             className="w-full accent-blue-600 h-1.5 bg-neutral-100 rounded-lg appearance-none cursor-pointer"
+                             className="w-full accent-neutral-900 h-1 bg-neutral-100 rounded-full appearance-none cursor-pointer"
                            />
                          </div>
 
-                         <div className="flex flex-col gap-2 mt-2">
-                           <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">System Instructions</label>
+                         <div className="flex flex-col gap-3">
+                           <label className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.3em] font-mono px-1">System_Directives</label>
                            <textarea 
                              value={inspectedNode.data.systemPrompt as string}
                              onChange={(e) => updateNodeData(inspectedNode.id, { systemPrompt: e.target.value })}
-                             placeholder="Enter strict instructions for this model..."
-                             className="border border-neutral-200 p-3 text-[12px] font-medium focus:outline-none focus:border-blue-500 rounded-md bg-neutral-50 h-24 resize-none"
+                             placeholder="Awaiting high-priority instructions..."
+                             className="w-full border border-neutral-200 p-4 text-[11px] font-mono font-medium focus:outline-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900 rounded-xl bg-white shadow-sm h-32 resize-none leading-relaxed"
                            />
                          </div>
-
                        </>
                       )}
                       <div className="pt-4 border-t border-neutral-100">
